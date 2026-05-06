@@ -1976,7 +1976,7 @@ class SlackAdapter(BasePlatformAdapter):
         is_mentioned = bot_uid and f"<@{bot_uid}>" in routing_text
         event_thread_ts = event.get("thread_ts")
         is_thread_reply = bool(event_thread_ts and event_thread_ts != ts)
-        if event_thread_ts:
+        if is_thread_reply:
             self._real_thread_parents.add(event_thread_ts)
             if len(self._real_thread_parents) > self._REAL_THREAD_PARENTS_MAX:
                 excess = list(self._real_thread_parents)[: self._REAL_THREAD_PARENTS_MAX // 2]
