@@ -4220,7 +4220,9 @@ class GatewayRunner:
             if not check_slack_requirements():
                 logger.warning("Slack: slack-bolt not installed. Run: pip install 'hermes-agent[slack]'")
                 return None
-            return SlackAdapter(config)
+            adapter = SlackAdapter(config)
+            adapter.gateway_runner = self
+            return adapter
 
         elif platform == Platform.SIGNAL:
             from gateway.platforms.signal import SignalAdapter, check_signal_requirements

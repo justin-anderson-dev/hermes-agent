@@ -288,6 +288,7 @@ class SlackAdapter(BasePlatformAdapter):
         self._app: Optional[Any] = None
         self._handler: Optional[Any] = None
         self._bot_user_id: Optional[str] = None
+        self.gateway_runner: Optional[Any] = None
         self._user_name_cache: Dict[str, str] = {}  # user_id → display name
         self._socket_mode_task: Optional[asyncio.Task] = None
         # Multi-workspace support
@@ -482,6 +483,11 @@ class SlackAdapter(BasePlatformAdapter):
         # Non-fatal — the user saw the initial ack already.
         return SendResult(success=True, message_id=None)
 
+    async def _emit_hook(self, event_type: str, context: Dict[str, Any]) -> None:
+        """Emit a gateway event hook if the runner is available."""
+        if self.gateway_runner and hasattr(self.gateway_runner, "hooks"):
+            await self.gateway_runner.hooks.emit(event_type, context)
+
     async def connect(self) -> bool:
         """Connect to Slack via Socket Mode."""
         if not SLACK_AVAILABLE:
@@ -600,6 +606,32 @@ class SlackAdapter(BasePlatformAdapter):
             @self._app.event("file_change")
             async def handle_file_change(event, say):
                 pass
+
+            @self._app.event("reaction_added")
+            async def handle_reaction_added(event, say):
+                # Filter to Alfred's own messages only
+                item = event.get("item", {})
+                if item.get("type") != "message":
+                    return
+
+                # Get team_id to resolve the correct bot identity
+                team_id = event.get("team_id") or ""
+                bot_user_id = self._team_bot_user_ids.get(team_id) or self._bot_user_id
+
+                # Check if this reaction is on a message sent by the bot
+                if event.get("item_user") != bot_user_id:
+                    return
+
+                # Emit hook event
+                await self._emit_hook("slack:reaction_added", {
+                    "reaction": event.get("reaction"),
+                    "user_id": event.get("user"),
+                    "item_ts": item.get("ts"),
+                    "channel": item.get("channel"),
+                    "item_type": item.get("type"),
+                    "platform": "slack",
+                    "team_id": team_id,
+                })
 
             @self._app.event("assistant_thread_started")
             async def handle_assistant_thread_started(event, say):
