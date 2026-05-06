@@ -329,6 +329,13 @@ class SlackAdapter(BasePlatformAdapter):
         # respond to ALL subsequent messages in that thread automatically.
         self._mentioned_threads: set = set()
         self._MENTIONED_THREADS_MAX = 5000
+        # Track thread parent ts values seen as real `event.thread_ts` values
+        # on inbound messages.  Lets _resolve_thread_ts distinguish a real
+        # thread reply from a synthetic thread_id (set to ts as a session-keying
+        # fallback for top-level messages) when reply_in_thread=false and no
+        # reply_to is provided by the caller.
+        self._real_thread_parents: set = set()
+        self._REAL_THREAD_PARENTS_MAX = 5000
         # Assistant thread metadata keyed by (channel_id, thread_ts). Slack's
         # AI Assistant lifecycle events can arrive before/alongside message
         # events, and they carry the user/thread identity needed for stable
@@ -985,8 +992,16 @@ class SlackAdapter(BasePlatformAdapter):
         if not self.config.extra.get("reply_in_thread", True):
             md = metadata or {}
             existing_thread = md.get("thread_id") or md.get("thread_ts")
-            if existing_thread and reply_to and existing_thread == reply_to:
-                existing_thread = None
+            if existing_thread:
+                if reply_to and existing_thread == reply_to:
+                    existing_thread = None
+                elif reply_to is None and existing_thread not in self._real_thread_parents:
+                    # Agent-driven sends (e.g. response delivery, notices) often
+                    # pass metadata={"thread_id": source.thread_id} without a
+                    # reply_to, so the synthetic-thread check above can't fire.
+                    # Cross-reference the set of inbound real thread parents to
+                    # decide whether this thread_id represents a real thread.
+                    existing_thread = None
             return existing_thread or None
 
         if metadata:
@@ -1961,6 +1976,12 @@ class SlackAdapter(BasePlatformAdapter):
         is_mentioned = bot_uid and f"<@{bot_uid}>" in routing_text
         event_thread_ts = event.get("thread_ts")
         is_thread_reply = bool(event_thread_ts and event_thread_ts != ts)
+        if event_thread_ts:
+            self._real_thread_parents.add(event_thread_ts)
+            if len(self._real_thread_parents) > self._REAL_THREAD_PARENTS_MAX:
+                excess = list(self._real_thread_parents)[: self._REAL_THREAD_PARENTS_MAX // 2]
+                for t in excess:
+                    self._real_thread_parents.discard(t)
 
         if not is_dm and bot_uid:
             # Check allowed channels — if set, only respond in these channels (whitelist)
