@@ -1,4 +1,0 @@
-allowBuilds:
-  '@askjo/camofox-browser': true
-  agent-browser: true
-  better-sqlite3: true

@@ -52,7 +52,7 @@ ENV npm_config_install_links=false
 RUN corepack enable && \
     corepack prepare pnpm@11.1.1 --activate && \
     pnpm install --frozen-lockfile && \
-    npx playwright install --with-deps chromium --only-shell && \
+    pnpm exec playwright install --with-deps chromium --only-shell && \
     (cd web && npm install --prefer-offline --no-audit) && \
     (cd ui-tui && npm install --prefer-offline --no-audit) && \
     npm cache clean --force
