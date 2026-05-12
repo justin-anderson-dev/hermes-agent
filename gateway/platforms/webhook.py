@@ -185,11 +185,11 @@ class WebhookAdapter(BasePlatformAdapter):
         try:
             await super()._process_message_background(event, session_key)
         finally:
-            session_store = getattr(self.gateway_runner, "session_store", None) if self.gateway_runner else None
-            if session_store is not None and getattr(session_store, "_db", None) is not None:
+            if self.gateway_runner and hasattr(self.gateway_runner, "session_store"):
                 try:
+                    session_store = self.gateway_runner.session_store
                     entry = session_store.get_or_create_session(event.source)
-                    if entry:
+                    if entry and session_store._db:
                         session_store._db.end_session(
                             entry.session_id, "webhook_complete"
                         )
