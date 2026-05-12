@@ -534,7 +534,22 @@ class WebhookAdapter(BasePlatformAdapter):
         )
 
         # Non-blocking — return 202 Accepted immediately
-        task = asyncio.create_task(self.handle_message(event))
+        async def _handle_and_end():
+            try:
+                await self.handle_message(event)
+            finally:
+                # Webhook sessions are one-shot: end the session in DB
+                # immediately after the run finishes so ended_at is set.
+                if self.gateway_runner and hasattr(self.gateway_runner, "session_store"):
+                    try:
+                        session_store = self.gateway_runner.session_store
+                        entry = session_store.get_or_create_session(source)
+                        if entry and session_store._db:
+                            session_store._db.end_session(entry.session_id, "webhook_complete")
+                    except Exception:
+                        logger.exception("[webhook] Failed to end session %s", session_chat_id)
+
+        task = asyncio.create_task(_handle_and_end())
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 

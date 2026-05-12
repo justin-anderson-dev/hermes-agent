@@ -758,3 +758,46 @@ class TestDeliverCrossPlatformThreadId:
         mock_target.send.assert_awaited_once_with(
             "12345", "hello", metadata=None
         )
+
+# ===================================================================
+# Session lifecycle
+# ===================================================================
+
+
+class TestSessionLifecycle:
+    @pytest.mark.asyncio
+    async def test_session_ends_after_handle_message(self):
+        """Webhook session is marked as ended in DB after the run finishes."""
+        routes = {"test": {"secret": _INSECURE_NO_AUTH, "prompt": "hi"}}
+        adapter = _make_adapter(routes=routes)
+        
+        # Mock handle_message to verify it's called
+        adapter.handle_message = AsyncMock()
+        
+        # Mock gateway_runner and session_store
+        mock_runner = MagicMock()
+        mock_store = MagicMock()
+        mock_db = MagicMock()
+        mock_store._db = mock_db
+        mock_entry = MagicMock()
+        mock_entry.session_id = "test-session-id"
+        mock_store.get_or_create_session.return_value = mock_entry
+        mock_runner.session_store = mock_store
+        adapter.gateway_runner = mock_runner
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post("/webhooks/test", json={"data": "value"})
+            assert resp.status == 202
+            
+            # Wait for the background task to complete
+            # We find the task in _background_tasks
+            tasks = [t for t in adapter._background_tasks]
+            if tasks:
+                await asyncio.gather(*tasks)
+            
+            # Verify handle_message was called
+            adapter.handle_message.assert_awaited_once()
+            
+            # Verify end_session was called with the right session_id and reason
+            mock_db.end_session.assert_called_once_with("test-session-id", "webhook_complete")

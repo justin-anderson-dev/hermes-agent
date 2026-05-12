@@ -1874,19 +1874,7 @@ class SlackAdapter(BasePlatformAdapter):
             channel_type = "im"
         is_dm = channel_type in ("im", "mpim")  # Both 1:1 and group DMs
 
-        # Build thread_ts for session keying.
-        # In channels: fall back to ts so each top-level @mention starts a
-        #   new thread/session (the bot always replies in a thread).
-        # In DMs: fall back to ts so each top-level DM reply thread gets
-        #   its own session key (matching channel behavior). Set
-        #   dm_top_level_threads_as_sessions: false in config to revert to
-        #   legacy single-session-per-DM-channel behavior.
-        if is_dm:
-            thread_ts = event.get("thread_ts") or assistant_meta.get("thread_ts")
-            if not thread_ts and self._dm_top_level_threads_as_sessions():
-                thread_ts = ts
-        else:
-            thread_ts = event.get("thread_ts") or ts  # ts fallback for channels
+        thread_ts = None
 
         # In channels, respond if:
         #   0. Channel is in free_response_channels, OR require_mention is
@@ -1900,6 +1888,44 @@ class SlackAdapter(BasePlatformAdapter):
         is_mentioned = bot_uid and f"<@{bot_uid}>" in routing_text
         event_thread_ts = event.get("thread_ts")
         is_thread_reply = bool(event_thread_ts and event_thread_ts != ts)
+
+        if (
+            not is_dm
+            and bot_uid
+            and is_mentioned
+            and not is_thread_reply
+            and not self.config.extra.get("reply_in_thread", True)
+        ):
+            # This is a top-level @mention in a channel, and config asks for
+            # top-level replies (reply_in_thread=false). Setting thread_ts=ts
+            # would normally key the session correctly (one session per
+            # top-level prompt), but it ALSO signals to _resolve_thread_ts
+            # that we should reply in a thread.
+            #
+            # When reply_in_thread is false, keep thread_ts=None so
+            # _resolve_thread_ts() returns None (no thread). The gateway still
+            # keys the session off the message ts via reply_to.
+            assigned_top_level = True
+        else:
+            assigned_top_level = False
+
+        # Build thread_ts for session keying.
+        # In channels: fall back to ts so each top-level @mention starts a
+        #   new thread/session (the bot always replies in a thread).
+        # In DMs: fall back to ts so each top-level DM reply thread gets
+        #   its own session key (matching channel behavior). Set
+        #   dm_top_level_threads_as_sessions: false in config to revert to
+        #   legacy single-session-per-DM-channel behavior.
+        if assigned_top_level:
+            # Already resolved above for reply_in_thread=false top-level case
+            pass
+        elif is_dm:
+            thread_ts = event.get("thread_ts") or assistant_meta.get("thread_ts")
+            if not thread_ts and self._dm_top_level_threads_as_sessions():
+                thread_ts = ts
+        else:
+            thread_ts = event.get("thread_ts") or ts  # ts fallback for channels
+
         if is_thread_reply:
             self._real_thread_parents.add(event_thread_ts)
             if len(self._real_thread_parents) > self._REAL_THREAD_PARENTS_MAX:
