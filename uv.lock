@@ -9,7 +9,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer = "2026-05-05T19:42:43.556929Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -2199,7 +2199,7 @@ requires-dist = [
     { name = "mautrix", extras = ["encryption"], marker = "extra == 'matrix'", specifier = ">=0.20,<1" },
     { name = "mcp", marker = "extra == 'dev'", specifier = ">=1.2.0,<2" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.2.0,<2" },
-    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.3.0,<3" },
+    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.3.0,!=2.4.6,<3" },
     { name = "modal", marker = "extra == 'modal'", specifier = ">=1.0.0,<2" },
     { name = "numpy", marker = "extra == 'voice'", specifier = ">=1.24.0,<3" },
     { name = "openai", specifier = ">=2.21.0,<3" },
