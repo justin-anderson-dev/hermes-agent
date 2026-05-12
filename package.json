@@ -11,6 +11,7 @@
     "url": "git+https://github.com/NousResearch/Hermes-Agent.git"
   },
   "license": "MIT",
+  "packageManager": "pnpm@11.1.1",
   "bugs": {
     "url": "https://github.com/NousResearch/Hermes-Agent/issues"
   },
