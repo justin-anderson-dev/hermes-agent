@@ -111,24 +111,28 @@ class TestCmdUpdateBranchFallback:
     def test_update_refreshes_repo_and_tui_node_dependencies(
         self, mock_run, mock_which, mock_args
     ):
-        mock_which.side_effect = {"uv": "/usr/bin/uv", "npm": "/usr/bin/npm"}.get
+        mock_which.side_effect = {
+            "uv": "/usr/bin/uv",
+            "npm": "/usr/bin/npm",
+            "pnpm": "/usr/bin/pnpm",
+        }.get
         mock_run.side_effect = _make_run_side_effect(
             branch="main", verify_ok=True, commit_count="1"
         )
 
         cmd_update(mock_args)
 
-        npm_calls = [
+        pm_calls = [
             (call.args[0], call.kwargs.get("cwd"))
             for call in mock_run.call_args_list
-            if call.args and call.args[0][0] == "/usr/bin/npm"
+            if call.args and call.args[0][0] in ("/usr/bin/npm", "/usr/bin/pnpm")
         ]
 
-        # cmd_update runs npm commands in three locations:
-        #   1. repo root  — slash-command / TUI bridge deps
-        #   2. ui-tui/    — Ink TUI deps
-        #   3. web/       — install + "npm run build" for the web frontend
-        full_flags = [
+        # cmd_update runs node package manager commands in three locations:
+        #   1. repo root  — pnpm workspace (post-pnpm migration)
+        #   2. ui-tui/    — npm + package-lock.json
+        #   3. web/       — npm install + "npm run build" for the web frontend
+        npm_full_flags = [
             "/usr/bin/npm",
             "ci",
             "--silent",
@@ -136,9 +140,12 @@ class TestCmdUpdateBranchFallback:
             "--no-audit",
             "--progress=false",
         ]
-        assert npm_calls == [
-            (full_flags, PROJECT_ROOT),
-            (full_flags, PROJECT_ROOT / "ui-tui"),
+        assert pm_calls == [
+            (
+                ["/usr/bin/pnpm", "install", "--frozen-lockfile", "--silent"],
+                PROJECT_ROOT,
+            ),
+            (npm_full_flags, PROJECT_ROOT / "ui-tui"),
             (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT / "web"),
             (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "web"),
         ]
