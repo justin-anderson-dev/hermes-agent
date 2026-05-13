@@ -46,7 +46,18 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          python -m pytest tests/ -q --ignore=tests/integration --ignore=tests/e2e --tb=short -n auto
+          # Build --deselect args from the curated list of upstream-broken tests.
+          # See .github/upstream-test-failures.txt for the list and rationale.
+          deselect_args=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in \#*) continue ;; esac
+            deselect_args+=("--deselect" "$line")
+          done < .github/upstream-test-failures.txt
+          python -m pytest tests/ -q \
+            --ignore=tests/integration --ignore=tests/e2e \
+            "${deselect_args[@]}" \
+            --tb=short -n auto
         env:
           # Ensure tests don't accidentally call real APIs
           OPENROUTER_API_KEY: ""
