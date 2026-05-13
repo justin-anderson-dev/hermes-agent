@@ -5533,6 +5533,39 @@ def _run_npm_install_deterministic(
     )
 
 
+def _run_pnpm_install_deterministic(
+    pnpm: str,
+    cwd: Path,
+    *,
+    extra_args: tuple[str, ...] = (),
+    capture_output: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run a deterministic pnpm install honoring the committed lockfile.
+
+    Prefers ``pnpm install --frozen-lockfile`` (strict, lockfile-preserving);
+    falls back to a plain ``pnpm install`` only if the frozen install fails
+    (e.g. lockfile out of sync on a WIP checkout).
+    """
+    frozen_cmd = [pnpm, "install", "--frozen-lockfile", *extra_args]
+    frozen_result = subprocess.run(
+        frozen_cmd,
+        cwd=cwd,
+        capture_output=capture_output,
+        text=True,
+        check=False,
+    )
+    if frozen_result.returncode == 0:
+        return frozen_result
+    install_cmd = [pnpm, "install", *extra_args]
+    return subprocess.run(
+        install_cmd,
+        cwd=cwd,
+        capture_output=capture_output,
+        text=True,
+        check=False,
+    )
+
+
 def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     """Build the web UI frontend if npm is available.
 
@@ -6497,7 +6530,8 @@ def _install_python_dependencies_with_optional_fallback(
 
 def _update_node_dependencies() -> None:
     npm = shutil.which("npm")
-    if not npm:
+    pnpm = shutil.which("pnpm")
+    if not npm and not pnpm:
         return
 
     paths = (
@@ -6512,16 +6546,29 @@ def _update_node_dependencies() -> None:
         if not (path / "package.json").exists():
             continue
 
-        result = _run_npm_install_deterministic(
-            npm,
-            path,
-            extra_args=("--silent", "--no-fund", "--no-audit", "--progress=false"),
-        )
+        if (path / "pnpm-lock.yaml").exists() and pnpm:
+            result = _run_pnpm_install_deterministic(
+                pnpm,
+                path,
+                extra_args=("--silent",),
+            )
+            failure_label = "pnpm install"
+        elif npm:
+            result = _run_npm_install_deterministic(
+                npm,
+                path,
+                extra_args=("--silent", "--no-fund", "--no-audit", "--progress=false"),
+            )
+            failure_label = "npm install"
+        else:
+            print(f"  ⚠ skipping {label}: pnpm-lock.yaml present but pnpm not installed")
+            continue
+
         if result.returncode == 0:
             print(f"  ✓ {label}")
             continue
 
-        print(f"  ⚠ npm install failed in {label}")
+        print(f"  ⚠ {failure_label} failed in {label}")
         stderr = (result.stderr or "").strip()
         if stderr:
             print(f"    {stderr.splitlines()[-1]}")

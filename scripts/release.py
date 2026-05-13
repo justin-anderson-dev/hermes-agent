@@ -46,6 +46,7 @@ AUTHOR_MAP = {
     "oleksii.lisikh@gmail.com": "olisikh",
     "leone.parise@gmail.com": "leoneparise",
     "teknium@nousresearch.com": "teknium1",
+    "justin@nousresearch.com": "justin-anderson-dev",
     "127238744+teknium1@users.noreply.github.com": "teknium1",
     "159539633+MottledShadow@users.noreply.github.com": "MottledShadow",
     "aludwin+gh@gmail.com": "adamludwin",
@@ -139,6 +140,8 @@ AUTHOR_MAP = {
     "thomasjhon6666@gmail.com": "ThomassJonax",
     "focusflow.app.help@gmail.com": "yes999zc",
     "rob@atlas.lan": "rmoen",
+    "justin@justinanderson.dev": "justin-anderson-dev",
+    "justin@nousresearch.com": "justin-anderson-dev",
     # Slack ephemeral slash-ack salvage (May 2026)
     "probepark@users.noreply.github.com": "probepark",
     # Slack batch salvage (May 2026)

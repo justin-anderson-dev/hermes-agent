@@ -33,7 +33,7 @@ WORKDIR /opt/hermes
 # because it is referenced as a `file:` workspace dependency from
 # ui-tui/package.json.  Copying the tree up front lets npm resolve the
 # workspace to real content instead of stopping at a bare package.json.
-COPY package.json package-lock.json ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 COPY web/package.json web/package-lock.json web/
 COPY ui-tui/package.json ui-tui/package-lock.json ui-tui/
 COPY ui-tui/packages/hermes-ink/ ui-tui/packages/hermes-ink/
@@ -49,8 +49,10 @@ COPY ui-tui/packages/hermes-ink/ ui-tui/packages/hermes-ink/
 # fails with EACCES (node_modules/ is root-owned from build time).
 ENV npm_config_install_links=false
 
-RUN npm install --prefer-offline --no-audit && \
-    npx playwright install --with-deps chromium --only-shell && \
+RUN corepack enable && \
+    corepack prepare pnpm@11.1.1 --activate && \
+    pnpm install --frozen-lockfile && \
+    pnpm exec playwright install --with-deps chromium --only-shell && \
     (cd web && npm install --prefer-offline --no-audit) && \
     (cd ui-tui && npm install --prefer-offline --no-audit) && \
     npm cache clean --force
