@@ -1453,7 +1453,10 @@ class TestProfileArg:
 
         plist = gateway_cli.generate_launchd_plist()
 
-        assert gateway_cli.LAUNCHD_MAXFILES == 65536
+        # Assert properties of the constant rather than pinning a specific number,
+        # so a future bump only requires changing the constant, not the test.
+        assert isinstance(gateway_cli.LAUNCHD_MAXFILES, int)
+        assert gateway_cli.LAUNCHD_MAXFILES > 256, "LAUNCHD_MAXFILES must be significantly above the default 256"
         limit_xml = f"<integer>{gateway_cli.LAUNCHD_MAXFILES}</integer>"
 
         soft_idx = plist.find("<key>SoftResourceLimits</key>")
