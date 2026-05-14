@@ -16,6 +16,11 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
+# launchd Soft/HardResourceLimits NumberOfFiles. Raised from launchd's
+# default (256) so the gateway can hold many concurrent platform sockets,
+# log handles, and child-tool fds without hitting EMFILE.
+LAUNCHD_MAXFILES = 65536
+
 from gateway.status import terminate_pid
 from gateway.restart import (
     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
@@ -2310,7 +2315,19 @@ def generate_launchd_plist() -> str:
         <key>SuccessfulExit</key>
         <false/>
     </dict>
-    
+
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>{LAUNCHD_MAXFILES}</integer>
+    </dict>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>{LAUNCHD_MAXFILES}</integer>
+    </dict>
+
     <key>StandardOutPath</key>
     <string>{log_dir}/gateway.log</string>
     

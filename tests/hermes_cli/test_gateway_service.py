@@ -1443,6 +1443,31 @@ class TestProfileArg:
         assert "<string>--profile</string>" in plist
         assert "<string>mybot</string>" in plist
 
+    def test_launchd_plist_emits_maxfiles_resource_limits(self, tmp_path, monkeypatch):
+        """generate_launchd_plist must raise NumberOfFiles via Soft+HardResourceLimits."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.setattr(gateway_cli, "get_hermes_home", lambda: hermes_home)
+
+        plist = gateway_cli.generate_launchd_plist()
+
+        assert gateway_cli.LAUNCHD_MAXFILES == 65536
+        limit_xml = f"<integer>{gateway_cli.LAUNCHD_MAXFILES}</integer>"
+
+        soft_idx = plist.find("<key>SoftResourceLimits</key>")
+        hard_idx = plist.find("<key>HardResourceLimits</key>")
+        assert soft_idx != -1, "SoftResourceLimits block missing from plist"
+        assert hard_idx != -1, "HardResourceLimits block missing from plist"
+
+        soft_block = plist[soft_idx:plist.find("</dict>", soft_idx)]
+        hard_block = plist[hard_idx:plist.find("</dict>", hard_idx)]
+        assert "<key>NumberOfFiles</key>" in soft_block
+        assert "<key>NumberOfFiles</key>" in hard_block
+        assert limit_xml in soft_block
+        assert limit_xml in hard_block
+
     def test_launchd_plist_path_uses_real_user_home_not_profile_home(self, tmp_path, monkeypatch):
         profile_dir = tmp_path / ".hermes" / "profiles" / "orcha"
         profile_dir.mkdir(parents=True)
