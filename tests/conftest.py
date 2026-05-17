@@ -158,6 +158,57 @@ def _looks_like_credential(name: str) -> bool:
     return any(name.endswith(suf) for suf in _CREDENTIAL_SUFFIXES)
 
 
+# ── Kanban env-isolation (ALF-267) ────────────────────────────────────────
+#
+# These four env vars pin the Kanban DB/board path with higher precedence
+# than HERMES_HOME. If any are exported in the parent process (developer
+# shell, leaky earlier test, CI env), a subprocess-based kanban CLI test
+# that builds its child env via ``dict(os.environ)`` will inherit them and
+# the child writes to the leaked path instead of the per-test isolated
+# board. We scrub them at session start AND in the per-test fixture so
+# both module-import and child-spawn paths are safe.
+
+_KANBAN_ISOLATION_VARS = (
+    "HERMES_KANBAN_DB",
+    "HERMES_KANBAN_HOME",
+    "HERMES_KANBAN_BOARD",
+    "HERMES_KANBAN_WORKSPACES_ROOT",
+)
+
+
+def clean_kanban_env(env: dict | None = None) -> dict:
+    """Return a copy of ``env`` (or ``os.environ``) with kanban pins removed.
+
+    Use this helper when constructing the ``env=`` arg for a subprocess
+    spawn of ``hermes kanban …`` — it guarantees the child cannot inherit
+    a stale ``HERMES_KANBAN_DB`` / ``HERMES_KANBAN_BOARD`` /
+    ``HERMES_KANBAN_HOME`` / ``HERMES_KANBAN_WORKSPACES_ROOT`` from the
+    parent process and write to a hostile path (see ALF-267).
+    """
+    base = dict(os.environ if env is None else env)
+    for var in _KANBAN_ISOLATION_VARS:
+        base.pop(var, None)
+    return base
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _scrub_kanban_env_at_session_start():
+    """Remove HERMES_KANBAN_* pins from ``os.environ`` for the whole session.
+
+    Runs once per pytest process. Belt-and-suspenders with the per-test
+    ``_hermetic_environment`` fixture: this catches module-import-time
+    reads of these vars (e.g., from imports triggered by collection),
+    while the per-test fixture catches anything that re-sets them.
+    """
+    saved = {}
+    for var in _KANBAN_ISOLATION_VARS:
+        if var in os.environ:
+            saved[var] = os.environ.pop(var)
+    yield
+    for var, value in saved.items():
+        os.environ[var] = value
+
+
 # HERMES_* vars that change test behavior by being set. Unset all of these
 # unconditionally — individual tests that need them set do so explicitly.
 _HERMES_BEHAVIORAL_VARS = frozenset({
@@ -188,6 +239,15 @@ _HERMES_BEHAVIORAL_VARS = frozenset({
     "HERMES_BACKGROUND_NOTIFICATIONS",
     "HERMES_EXEC_ASK",
     "HERMES_HOME_MODE",
+    # Kanban DB/board pins. If a developer or CI has any of these
+    # exported, subprocess-based kanban CLI tests inherit them via
+    # ``dict(os.environ)`` and the child writes to the operator's real
+    # board instead of the per-test isolated one (ALF-267). Force-clear
+    # so the inheritance path is safe.
+    "HERMES_KANBAN_DB",
+    "HERMES_KANBAN_HOME",
+    "HERMES_KANBAN_BOARD",
+    "HERMES_KANBAN_WORKSPACES_ROOT",
     "TERMINAL_CWD",
     "TERMINAL_ENV",
     "TERMINAL_VERCEL_RUNTIME",

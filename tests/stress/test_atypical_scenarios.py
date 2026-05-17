@@ -227,7 +227,13 @@ def _(home, kb):
     finally:
         conn.close()
 
-    env = {**os.environ, "PYTHONPATH": str(WT), "HERMES_HOME": home, "HOME": home}
+    # Strip HERMES_KANBAN_* pins so a stale operator-shell pin can't
+    # route the child to the real kanban DB instead of this scenario's
+    # isolated HERMES_HOME (ALF-267).
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("HERMES_KANBAN_DB", "HERMES_KANBAN_HOME",
+                        "HERMES_KANBAN_BOARD", "HERMES_KANBAN_WORKSPACES_ROOT")}
+    env.update({"PYTHONPATH": str(WT), "HERMES_HOME": home, "HOME": home})
     bad_metas = [
         "not-json",
         "[1, 2, 3]",  # array not dict

@@ -72,6 +72,15 @@ unset HERMES_YOLO_MODE HERMES_INTERACTIVE HERMES_QUIET HERMES_TOOL_PROGRESS \
       HERMES_REDACT_SECRETS HERMES_BACKGROUND_NOTIFICATIONS HERMES_EXEC_ASK \
       HERMES_HOME_MODE 2>/dev/null || true
 
+# Kanban DB/board pins (ALF-267). If exported in the developer/CI shell,
+# subprocess-based kanban CLI tests inherit them via dict(os.environ) and
+# write to the operator's real board instead of the per-test isolated one.
+# conftest.py also scrubs these, but unset here too so anyone running
+# `pytest` outside of conftest's autouse fixture (or running this script
+# but invoking other tools first) still has a clean shell.
+unset HERMES_KANBAN_DB HERMES_KANBAN_HOME HERMES_KANBAN_BOARD \
+      HERMES_KANBAN_WORKSPACES_ROOT 2>/dev/null || true
+
 # Pin deterministic runtime.
 export TZ=UTC
 export LANG=C.UTF-8
