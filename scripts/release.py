@@ -331,6 +331,7 @@ AUTHOR_MAP = {
     "focusflow.app.help@gmail.com": "yes999zc",
     "rob@atlas.lan": "rmoen",
     "justin@justinanderson.dev": "justin-anderson-dev",
+    "justin@justin-anderson.dev": "justin-anderson-dev",
     "justin@nousresearch.com": "justin-anderson-dev",
     # Slack ephemeral slash-ack salvage (May 2026)
     "probepark@users.noreply.github.com": "probepark",
