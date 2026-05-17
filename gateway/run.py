@@ -3434,6 +3434,22 @@ class GatewayRunner:
                                     "failed for %s (attempt %d/%d)",
                                     sub["task_id"], fails, MAX_SEND_FAILURES,
                                 )
+                                # Mirror the adapter.send drop-after-N
+                                # behavior: route deleted / secret rotated /
+                                # listener permanently down would otherwise
+                                # spin every tick forever.
+                                if fails >= MAX_SEND_FAILURES:
+                                    logger.warning(
+                                        "kanban notifier: dropping webhook "
+                                        "subscription %s on route '%s' after "
+                                        "%d consecutive delivery failures",
+                                        sub["task_id"], sub.get("chat_id") or "",
+                                        fails,
+                                    )
+                                    await asyncio.to_thread(
+                                        self._kanban_unsub, sub, board_slug,
+                                    )
+                                    sub_fail_counts.pop(sub_key, None)
                                 all_ok = False
                                 # Don't advance cursor on failure — retry next tick.
                                 break
