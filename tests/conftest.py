@@ -167,28 +167,12 @@ def _looks_like_credential(name: str) -> bool:
 # the child writes to the leaked path instead of the per-test isolated
 # board. We scrub them at session start AND in the per-test fixture so
 # both module-import and child-spawn paths are safe.
+#
+# The ``clean_kanban_env`` helper lives in ``tests/_kanban_env.py`` (not
+# here) so test files can import it via a regular module path without
+# relying on pytest's conftest discovery — see that module's docstring.
 
-_KANBAN_ISOLATION_VARS = (
-    "HERMES_KANBAN_DB",
-    "HERMES_KANBAN_HOME",
-    "HERMES_KANBAN_BOARD",
-    "HERMES_KANBAN_WORKSPACES_ROOT",
-)
-
-
-def clean_kanban_env(env: dict | None = None) -> dict:
-    """Return a copy of ``env`` (or ``os.environ``) with kanban pins removed.
-
-    Use this helper when constructing the ``env=`` arg for a subprocess
-    spawn of ``hermes kanban …`` — it guarantees the child cannot inherit
-    a stale ``HERMES_KANBAN_DB`` / ``HERMES_KANBAN_BOARD`` /
-    ``HERMES_KANBAN_HOME`` / ``HERMES_KANBAN_WORKSPACES_ROOT`` from the
-    parent process and write to a hostile path (see ALF-267).
-    """
-    base = dict(os.environ if env is None else env)
-    for var in _KANBAN_ISOLATION_VARS:
-        base.pop(var, None)
-    return base
+from tests._kanban_env import _KANBAN_ISOLATION_VARS, clean_kanban_env  # noqa: F401  (re-exported)
 
 
 @pytest.fixture(scope="session", autouse=True)

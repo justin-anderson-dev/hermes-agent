@@ -32,6 +32,10 @@ from pathlib import Path
 # Resolve the worktree path robustly.
 _THIS = Path(__file__).resolve()
 WT = _THIS.parents[2] if _THIS.parent.name == "stress" else Path.cwd()
+if str(WT) not in sys.path:
+    sys.path.insert(0, str(WT))
+
+from tests._kanban_env import clean_kanban_env  # noqa: E402
 
 FAILURES: list[str] = []
 SKIPS: list[str] = []
@@ -230,9 +234,7 @@ def _(home, kb):
     # Strip HERMES_KANBAN_* pins so a stale operator-shell pin can't
     # route the child to the real kanban DB instead of this scenario's
     # isolated HERMES_HOME (ALF-267).
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("HERMES_KANBAN_DB", "HERMES_KANBAN_HOME",
-                        "HERMES_KANBAN_BOARD", "HERMES_KANBAN_WORKSPACES_ROOT")}
+    env = clean_kanban_env()
     env.update({"PYTHONPATH": str(WT), "HERMES_HOME": home, "HOME": home})
     bad_metas = [
         "not-json",

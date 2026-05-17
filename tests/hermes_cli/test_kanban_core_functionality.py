@@ -24,6 +24,7 @@ import pytest
 
 from hermes_cli import kanban_db as kb
 from hermes_cli.kanban import run_slash
+from tests._kanban_env import clean_kanban_env
 
 
 # ---------------------------------------------------------------------------
@@ -1658,7 +1659,6 @@ def test_cli_bulk_complete_with_summary_rejects(kanban_home):
     # effects instead.
     from subprocess import run as _run
     import os, sys
-    from tests.conftest import clean_kanban_env
     env = clean_kanban_env()
     r = _run(
         [sys.executable, "-m", "hermes_cli.main", "kanban",
@@ -1889,7 +1889,6 @@ def test_cli_create_on_fresh_home_auto_inits(tmp_path, monkeypatch):
     # Sanity: kanban.db does NOT exist yet.
     import subprocess as _sp
     import sys as _sys
-    from tests.conftest import clean_kanban_env
     worktree_root = Path(__file__).resolve().parents[2]
     env = clean_kanban_env()
     env["HERMES_HOME"] = str(home)

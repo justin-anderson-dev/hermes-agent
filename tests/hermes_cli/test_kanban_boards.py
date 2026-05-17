@@ -29,6 +29,7 @@ if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
 
 from hermes_cli import kanban_db as kb
+from tests._kanban_env import clean_kanban_env
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +416,6 @@ def _cli(args: list[str], env_extra: dict | None = None) -> subprocess.Completed
     child env via :func:`clean_kanban_env` so a stale operator-shell pin
     can't route the child to the real kanban DB (ALF-267).
     """
-    from tests.conftest import clean_kanban_env
-
     env = clean_kanban_env()
     env["PYTHONPATH"] = str(_WORKTREE)
     if env_extra:
