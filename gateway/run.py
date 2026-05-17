@@ -5208,6 +5208,10 @@ class GatewayRunner:
                                     "failed for %s (attempt %d/%d)",
                                     sub["task_id"], fails, MAX_SEND_FAILURES,
                                 )
+                                # Mirror the adapter.send drop-after-N
+                                # behavior: route deleted / secret rotated /
+                                # listener permanently down would otherwise
+                                # spin every tick forever.
                                 if fails >= MAX_SEND_FAILURES:
                                     logger.warning(
                                         "kanban notifier: dropping webhook "

@@ -381,6 +381,33 @@ def test_watcher_does_not_advance_cursor_on_failed_webhook_delivery(kanban_home)
     assert int(subs[0]["last_event_id"]) < ev_id
 
 
+def test_watcher_drops_webhook_sub_after_max_failures(kanban_home):
+    """Mirror the ``adapter.send`` drop-after-N behavior on the webhook lane.
+
+    A perma-failing webhook (route deleted, secret rotated, listener gone)
+    would otherwise spin every tick forever. After ``MAX_SEND_FAILURES``
+    consecutive failures the watcher must drop the subscription.
+    """
+    from hermes_cli import kanban_db as kb
+
+    task_id, _ = _seed_task_with_event(kind="completed")
+    runner = _make_runner()
+    runner.adapters[Platform.WEBHOOK] = _make_webhook_adapter()
+
+    async def _fail(*, sub, event, task, board):
+        return False
+
+    runner._kanban_deliver_webhook_event = _fail  # type: ignore[method-assign]
+
+    # MAX_SEND_FAILURES = 3 inside the watcher; run three ticks.
+    for _ in range(3):
+        _run_one_watcher_tick(runner)
+
+    with kb.connect() as conn:
+        subs = kb.list_notify_subs(conn, task_id=task_id)
+    assert subs == []
+
+
 def test_watcher_skips_webhook_branch_for_non_kanban_completion_chat(kanban_home):
     """Convention guard: only chat_id=='kanban-completion' enters the bridge.
 
