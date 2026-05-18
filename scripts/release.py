@@ -47,6 +47,7 @@ AUTHOR_MAP = {
     "leone.parise@gmail.com": "leoneparise",
     "teknium@nousresearch.com": "teknium1",
     "justin@nousresearch.com": "justin-anderson-dev",
+    "justin-anderson-dev@users.noreply.github.com": "justin-anderson-dev",
     "127238744+teknium1@users.noreply.github.com": "teknium1",
     "159539633+MottledShadow@users.noreply.github.com": "MottledShadow",
     "aludwin+gh@gmail.com": "adamludwin",

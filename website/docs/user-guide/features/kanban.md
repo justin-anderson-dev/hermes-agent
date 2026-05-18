@@ -447,25 +447,16 @@ Visually the target is the familiar Linear / Fusion layout: dark theme, column h
 
 The GUI is strictly a **read-through-the-DB + write-through-kanban_db** layer with no domain logic of its own:
 
+```text
+React SPA plugin (HTML5 drag-and-drop)
+  <- WebSocket tail of task_events
+  -> REST via fetchJSON
+FastAPI router (plugins/kanban/dashboard/plugin_api.py)
+  -> writes via kanban_db.* (same code path used by CLI /kanban verbs)
+~/.hermes/kanban.db (WAL, shared)
 ```
-┌────────────────────────┐      WebSocket (tails task_events)
-│   React SPA (plugin)   │ ◀──────────────────────────────────┐
-│   HTML5 drag-and-drop  │                                    │
-└──────────┬─────────────┘                                    │
-           │ REST over fetchJSON                              │
-           ▼                                                  │
-┌────────────────────────┐     writes call kanban_db.*        │
-│  FastAPI router        │     directly — same code path      │
-│  plugins/kanban/       │     the CLI /kanban verbs use      │
-│  dashboard/plugin_api.py                                    │
-└──────────┬─────────────┘                                    │
-           │                                                  │
-           ▼                                                  │
-┌────────────────────────┐                                    │
-│  ~/.hermes/kanban.db   │ ───── append task_events ──────────┘
-│  (WAL, shared)         │
-└────────────────────────┘
-```
+
+The router writes through `kanban_db.*`, while the SPA reads live updates by tailing `task_events` over WebSocket.
 
 ### REST surface
 
