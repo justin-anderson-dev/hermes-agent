@@ -110,6 +110,7 @@ AUTHOR_MAP = {
     "zhanganzhe@tenclass.com": "luoyuctl",
     "51604064+luoyuctl@users.noreply.github.com": "luoyuctl",
     "justin@nousresearch.com": "justin-anderson-dev",
+    "justin-anderson-dev@users.noreply.github.com": "justin-anderson-dev",
     "127238744+teknium1@users.noreply.github.com": "teknium1",
     "tolle.lege+github@gmail.com": "InB4DevOps",
     "73686890+InB4DevOps@users.noreply.github.com": "InB4DevOps",

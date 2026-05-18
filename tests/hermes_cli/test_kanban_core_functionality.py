@@ -24,6 +24,7 @@ import pytest
 
 from hermes_cli import kanban_db as kb
 from hermes_cli.kanban import run_slash
+from tests._kanban_env import clean_kanban_env
 
 
 # ---------------------------------------------------------------------------
@@ -1961,7 +1962,7 @@ def test_cli_bulk_complete_with_summary_rejects(kanban_home):
     # effects instead.
     from subprocess import run as _run
     import os, sys
-    env = os.environ.copy()
+    env = clean_kanban_env()
     r = _run(
         [sys.executable, "-m", "hermes_cli.main", "kanban",
          "complete", a, b, "--summary", "oops"],
@@ -2192,8 +2193,9 @@ def test_cli_create_on_fresh_home_auto_inits(tmp_path, monkeypatch):
     import subprocess as _sp
     import sys as _sys
     worktree_root = Path(__file__).resolve().parents[2]
-    env = {**os.environ, "HERMES_HOME": str(home),
-           "PYTHONPATH": str(worktree_root)}
+    env = clean_kanban_env()
+    env["HERMES_HOME"] = str(home)
+    env["PYTHONPATH"] = str(worktree_root)
     r = _sp.run(
         [_sys.executable, "-m", "hermes_cli.main", "kanban",
          "create", "smoke", "--assignee", "worker", "--json"],
