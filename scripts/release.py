@@ -333,7 +333,6 @@ AUTHOR_MAP = {
     "justand@gmail.com": "justin-anderson-dev",
     "justin@justinanderson.dev": "justin-anderson-dev",
     "justin@justin-anderson.dev": "justin-anderson-dev",
-    "justin@nousresearch.com": "justin-anderson-dev",
     "justin@watchworddigital.com": "justin-anderson-dev",
     # Slack ephemeral slash-ack salvage (May 2026)
     "probepark@users.noreply.github.com": "probepark",
