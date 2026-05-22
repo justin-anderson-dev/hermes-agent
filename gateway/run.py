@@ -4697,6 +4697,14 @@ class GatewayRunner:
                                         self._kanban_unsub, sub, board_slug,
                                     )
                                     sub_fail_counts.pop(sub_key, None)
+                                else:
+                                    await asyncio.to_thread(
+                                        self._kanban_rewind,
+                                        sub,
+                                        d["cursor"],
+                                        d.get("old_cursor", 0),
+                                        board_slug,
+                                    )
                                 all_ok = False
                                 # Don't advance cursor on failure — retry next tick.
                                 break
@@ -4707,7 +4715,7 @@ class GatewayRunner:
                             )
                             last_kind = d["events"][-1].kind
                             task_terminal = task and task.status in ("done", "archived")
-                            event_terminal = last_kind in TERMINAL_EVENT_KINDS
+                            event_terminal = last_kind in TERMINAL_KINDS
                             if task_terminal or event_terminal:
                                 await asyncio.to_thread(
                                     self._kanban_unsub, sub, board_slug,
