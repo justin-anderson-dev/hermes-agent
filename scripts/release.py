@@ -330,6 +330,7 @@ AUTHOR_MAP = {
     "thomasjhon6666@gmail.com": "ThomassJonax",
     "focusflow.app.help@gmail.com": "yes999zc",
     "rob@atlas.lan": "rmoen",
+    "justanders@gmail.com": "justin-anderson-dev",
     "justand@gmail.com": "justin-anderson-dev",
     "justin@justinanderson.dev": "justin-anderson-dev",
     "justin@justin-anderson.dev": "justin-anderson-dev",
