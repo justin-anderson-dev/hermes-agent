@@ -932,11 +932,13 @@ class TestProfileRestoration:
         wrapper_dir = tmp_path / ".local" / "bin"
         wrapper_dir.mkdir(parents=True)
 
-        # check_alias_collision() runs `which <profile>` against the real
-        # process PATH — a developer machine may have unrelated binaries
-        # called "coder", "researcher" etc. on PATH. Pin PATH to the
-        # isolated wrapper_dir so collision detection is hermetic.
-        monkeypatch.setenv("PATH", str(wrapper_dir))
+        # Patch check_alias_collision directly so collision detection is
+        # hermetic — pinning PATH to wrapper_dir alone would break the
+        # `which` binary lookup that check_alias_collision relies on.
+        monkeypatch.setattr(
+            "hermes_cli.profiles.check_alias_collision",
+            lambda profile_name: None,
+        )
 
         zip_path = tmp_path / "backup.zip"
         self._make_backup_zip(zip_path, {
