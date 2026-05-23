@@ -835,3 +835,164 @@ class TestInsecureNoAuthSafetyRail:
         finally:
             await adapter.disconnect()
 
+
+# ===================================================================
+# Session lifecycle
+# ===================================================================
+
+
+class TestSessionLifecycle:
+    """Webhook one-shot sessions must record ``ended_at`` AFTER the background
+    processing coroutine actually completes — not when the HTTP handler
+    schedules it.  These tests target ``_process_message_background`` directly
+    so the lifecycle ordering is observable; the previous AsyncMock-on-
+    ``handle_message`` setup only proved the wrapper awaited a mock and was
+    blind to the real bug (session ended before processing finished).
+    """
+
+    @pytest.mark.asyncio
+    async def test_end_session_runs_after_process_background_completes(self):
+        """The end_session call must happen AFTER the base processing finishes.
+
+        We patch the base class's ``_process_message_background`` with a
+        coroutine that yields to the event loop so any premature
+        ``end_session`` call would land first.  The recorded ordering proves
+        the override only ends the session in its ``finally`` block.
+        """
+        from gateway.platforms.base import BasePlatformAdapter
+
+        adapter = _make_adapter(routes={"test": {"secret": _INSECURE_NO_AUTH, "prompt": "hi"}})
+
+        call_order = []
+
+        async def fake_super_pmb(self_, event, session_key):
+            call_order.append("processing_start")
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            call_order.append("processing_end")
+
+        mock_db = MagicMock()
+        mock_db.end_session.side_effect = lambda *a, **kw: call_order.append("end_session")
+
+        mock_store = MagicMock()
+        mock_store._db = mock_db
+        mock_entry = MagicMock()
+        mock_entry.session_id = "test-session-id"
+        mock_store.get_or_create_session.return_value = mock_entry
+        mock_runner = MagicMock()
+        mock_runner.session_store = mock_store
+        adapter.gateway_runner = mock_runner
+
+        source = adapter.build_source(
+            chat_id="webhook:test:abc", chat_type="webhook", user_id="webhook:test",
+        )
+        event = MessageEvent(
+            text="hi",
+            message_type=MessageType.TEXT,
+            source=source,
+            raw_message={},
+            message_id="abc",
+        )
+
+        with patch.object(BasePlatformAdapter, "_process_message_background", new=fake_super_pmb):
+            await adapter._process_message_background(event, "session-key")
+
+        assert call_order == ["processing_start", "processing_end", "end_session"], (
+            f"end_session must run after processing completes; got order={call_order}"
+        )
+        mock_db.end_session.assert_called_once_with("test-session-id", "webhook_complete")
+
+    @pytest.mark.asyncio
+    async def test_end_session_runs_when_processing_raises(self):
+        """If the agent run raises, the session still gets ended.
+
+        The override's ``finally`` clause must run whether processing
+        succeeds or fails — otherwise crashed sessions leak with
+        ``ended_at IS NULL`` forever.
+        """
+        from gateway.platforms.base import BasePlatformAdapter
+
+        adapter = _make_adapter(routes={"test": {"secret": _INSECURE_NO_AUTH, "prompt": "hi"}})
+
+        async def fake_super_pmb(self_, event, session_key):
+            raise RuntimeError("boom")
+
+        mock_db = MagicMock()
+        mock_store = MagicMock()
+        mock_store._db = mock_db
+        mock_entry = MagicMock()
+        mock_entry.session_id = "crashed-session-id"
+        mock_store.get_or_create_session.return_value = mock_entry
+        mock_runner = MagicMock()
+        mock_runner.session_store = mock_store
+        adapter.gateway_runner = mock_runner
+
+        source = adapter.build_source(
+            chat_id="webhook:test:abc", chat_type="webhook", user_id="webhook:test",
+        )
+        event = MessageEvent(
+            text="hi",
+            message_type=MessageType.TEXT,
+            source=source,
+            raw_message={},
+            message_id="abc",
+        )
+
+        with patch.object(BasePlatformAdapter, "_process_message_background", new=fake_super_pmb):
+            with pytest.raises(RuntimeError):
+                await adapter._process_message_background(event, "session-key")
+
+        mock_db.end_session.assert_called_once_with("crashed-session-id", "webhook_complete")
+
+    @pytest.mark.asyncio
+    async def test_http_post_triggers_end_session_after_background_task(self):
+        """End-to-end: POST returns 202 fast, end_session runs after the task.
+
+        Uses a real handler that we control to gate completion.  Verifies the
+        HTTP response is sent before the message handler completes, and that
+        ``end_session`` is only invoked after the handler returns.
+        """
+        routes = {"test": {"secret": _INSECURE_NO_AUTH, "prompt": "hi"}}
+        adapter = _make_adapter(routes=routes)
+
+        handler_done = asyncio.Event()
+        end_session_called = asyncio.Event()
+        order = []
+
+        async def message_handler(event):
+            order.append("handler_start")
+            await asyncio.sleep(0.02)
+            order.append("handler_end")
+            handler_done.set()
+            return None
+
+        adapter.set_message_handler(message_handler)
+
+        mock_db = MagicMock()
+
+        def _record_end_session(*args, **kwargs):
+            order.append("end_session")
+            end_session_called.set()
+
+        mock_db.end_session.side_effect = _record_end_session
+        mock_store = MagicMock()
+        mock_store._db = mock_db
+        mock_entry = MagicMock()
+        mock_entry.session_id = "e2e-session-id"
+        mock_store.get_or_create_session.return_value = mock_entry
+        mock_runner = MagicMock()
+        mock_runner.session_store = mock_store
+        adapter.gateway_runner = mock_runner
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post("/webhooks/test", json={"data": "value"})
+            assert resp.status == 202
+            # handler is asynchronous — should not be done yet when 202 returns
+            assert not handler_done.is_set(), "handler should still be running when 202 returns"
+            await asyncio.wait_for(end_session_called.wait(), timeout=2.0)
+
+        assert order.index("handler_end") < order.index("end_session"), (
+            f"end_session ran before handler finished: {order}"
+        )
+        mock_db.end_session.assert_called_once_with("e2e-session-id", "webhook_complete")

@@ -329,6 +329,13 @@ class SlackAdapter(BasePlatformAdapter):
         # respond to ALL subsequent messages in that thread automatically.
         self._mentioned_threads: set = set()
         self._MENTIONED_THREADS_MAX = 5000
+        # Track thread parent ts values seen as real `event.thread_ts` values
+        # on inbound messages.  Lets _resolve_thread_ts distinguish a real
+        # thread reply from a synthetic thread_id (set to ts as a session-keying
+        # fallback for top-level messages) when reply_in_thread=false and no
+        # reply_to is provided by the caller.
+        self._real_thread_parents: set = set()
+        self._REAL_THREAD_PARENTS_MAX = 5000
         # Assistant thread metadata keyed by (channel_id, thread_ts). Slack's
         # AI Assistant lifecycle events can arrive before/alongside message
         # events, and they carry the user/thread identity needed for stable
@@ -985,8 +992,16 @@ class SlackAdapter(BasePlatformAdapter):
         if not self.config.extra.get("reply_in_thread", True):
             md = metadata or {}
             existing_thread = md.get("thread_id") or md.get("thread_ts")
-            if existing_thread and reply_to and existing_thread == reply_to:
-                existing_thread = None
+            if existing_thread:
+                if reply_to and existing_thread == reply_to:
+                    existing_thread = None
+                elif reply_to is None and existing_thread not in self._real_thread_parents:
+                    # Agent-driven sends (e.g. response delivery, notices) often
+                    # pass metadata={"thread_id": source.thread_id} without a
+                    # reply_to, so the synthetic-thread check above can't fire.
+                    # Cross-reference the set of inbound real thread parents to
+                    # decide whether this thread_id represents a real thread.
+                    existing_thread = None
             return existing_thread or None
 
         if metadata:
@@ -1935,19 +1950,14 @@ class SlackAdapter(BasePlatformAdapter):
             channel_type = "im"
         is_dm = channel_type in {"im", "mpim"}  # Both 1:1 and group DMs
 
-        # Build thread_ts for session keying.
-        # In channels: fall back to ts so each top-level @mention starts a
-        #   new thread/session (the bot always replies in a thread).
-        # In DMs: fall back to ts so each top-level DM reply thread gets
-        #   its own session key (matching channel behavior). Set
-        #   dm_top_level_threads_as_sessions: false in config to revert to
-        #   legacy single-session-per-DM-channel behavior.
-        if is_dm:
-            thread_ts = event.get("thread_ts") or assistant_meta.get("thread_ts")
-            if not thread_ts and self._dm_top_level_threads_as_sessions():
-                thread_ts = ts
-        else:
-            thread_ts = event.get("thread_ts") or ts  # ts fallback for channels
+        # ``thread_ts`` here is the **session-key ts** — the top-level prompt's
+        # message ts.  It is used to derive ``source.thread_id`` so each
+        # top-level @mention becomes its own session (build_session_key keys
+        # off ``thread_id``).  This is independent of the **reply-side thread
+        # ts** that ``_resolve_thread_ts()`` computes for ``chat.postMessage``:
+        # when ``reply_in_thread=false``, a synthetic session-key ts that
+        # equals the inbound message id is detected as synthetic and the bot
+        # posts at channel level (not in a thread).  See ``_resolve_thread_ts``.
 
         # In channels, respond if:
         #   0. Channel is in free_response_channels, OR require_mention is
@@ -1961,6 +1971,33 @@ class SlackAdapter(BasePlatformAdapter):
         is_mentioned = bot_uid and f"<@{bot_uid}>" in routing_text
         event_thread_ts = event.get("thread_ts")
         is_thread_reply = bool(event_thread_ts and event_thread_ts != ts)
+
+        # Build the session-key ts.  In channels, fall back to ``ts`` so each
+        # top-level @mention starts a new session — even when
+        # ``reply_in_thread=false``.  Decoupling reply routing from session
+        # keying is critical: if we left thread_ts unset to suppress thread
+        # replies, every top-level message in the same channel would collapse
+        # into a single shared session (build_session_key uses thread_id).
+        # ``_resolve_thread_ts`` separately strips the synthetic thread for
+        # the send-side when reply_in_thread is false (see synthetic-thread
+        # detection there: ``existing_thread == reply_to`` → ``None``).
+        if is_dm:
+            thread_ts = event.get("thread_ts") or assistant_meta.get("thread_ts")
+            if not thread_ts and self._dm_top_level_threads_as_sessions():
+                thread_ts = ts
+        else:
+            thread_ts = event.get("thread_ts") or ts  # ts fallback for channels
+
+        if is_thread_reply:
+            # Only track *real* thread replies (thread_ts != ts) here.  Synthetic
+            # top-level session-key ts values must NOT enter _real_thread_parents
+            # or ``_resolve_thread_ts`` would treat them as real threads when an
+            # agent-driven send arrives without reply_to.
+            self._real_thread_parents.add(event_thread_ts)
+            if len(self._real_thread_parents) > self._REAL_THREAD_PARENTS_MAX:
+                excess = list(self._real_thread_parents)[: self._REAL_THREAD_PARENTS_MAX // 2]
+                for t in excess:
+                    self._real_thread_parents.discard(t)
 
         if not is_dm and bot_uid:
             # Check allowed channels — if set, only respond in these channels (whitelist)
