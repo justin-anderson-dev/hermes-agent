@@ -124,12 +124,21 @@ class TestWslSystemdOperational:
 class TestSupportsSystemdServicesWSL:
     """Test that supports_systemd_services() handles WSL correctly."""
 
+    @pytest.fixture(autouse=True)
+    def _stub_systemctl_in_path(self, monkeypatch):
+        # supports_systemd_services() short-circuits to False when
+        # `shutil.which("systemctl")` returns None — true on macOS, where
+        # systemctl simply doesn't exist. Stub it so the tests exercise
+        # the WSL/native branches rather than the "no systemctl" path.
+        monkeypatch.setattr(gateway.shutil, "which", lambda _: "/usr/bin/systemctl")
+
     def test_wsl_with_systemd(self, monkeypatch):
         """WSL + working systemd → True."""
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
         monkeypatch.setattr(gateway, "_wsl_systemd_operational", lambda: True)
+        monkeypatch.setattr(gateway, "is_container", lambda: False)
         assert gateway.supports_systemd_services() is True
 
     def test_wsl_without_systemd(self, monkeypatch):
@@ -138,6 +147,7 @@ class TestSupportsSystemdServicesWSL:
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
         monkeypatch.setattr(gateway, "_wsl_systemd_operational", lambda: False)
+        monkeypatch.setattr(gateway, "is_container", lambda: False)
         assert gateway.supports_systemd_services() is False
 
     def test_native_linux(self, monkeypatch):
@@ -145,6 +155,7 @@ class TestSupportsSystemdServicesWSL:
         monkeypatch.setattr(gateway, "is_linux", lambda: True)
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
         monkeypatch.setattr(gateway, "is_wsl", lambda: False)
+        monkeypatch.setattr(gateway, "is_container", lambda: False)
         assert gateway.supports_systemd_services() is True
 
     def test_termux_still_excluded(self, monkeypatch):

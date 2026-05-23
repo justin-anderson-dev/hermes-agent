@@ -91,7 +91,10 @@ def test_periodic_timer_fires(caplog):
     caplog.set_level(logging.INFO, logger="gateway.memory_monitor")
     # Short interval so we can observe multiple ticks inside the test budget.
     mm.start_memory_monitoring(interval_seconds=0.1)
-    time.sleep(0.45)
+    # Sleep generously: under xdist with multiple workers contending for CPU,
+    # the 0.1s timer can easily slip 200-300ms per tick. 0.7s gives us room
+    # for at least 3 ticks even when each one drifts 100ms.
+    time.sleep(0.7)
     mm.stop_memory_monitoring(timeout=1.0)
 
     periodic = [

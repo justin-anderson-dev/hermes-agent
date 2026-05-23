@@ -932,6 +932,12 @@ class TestProfileRestoration:
         wrapper_dir = tmp_path / ".local" / "bin"
         wrapper_dir.mkdir(parents=True)
 
+        # check_alias_collision() runs `which <profile>` against the real
+        # process PATH — a developer machine may have unrelated binaries
+        # called "coder", "researcher" etc. on PATH. Pin PATH to the
+        # isolated wrapper_dir so collision detection is hermetic.
+        monkeypatch.setenv("PATH", str(wrapper_dir))
+
         zip_path = tmp_path / "backup.zip"
         self._make_backup_zip(zip_path, {
             "config.yaml": "model:\n  provider: openrouter\n",

@@ -28,6 +28,22 @@ from agent.anthropic_adapter import (
 from agent.transports import get_transport
 
 
+@pytest.fixture(autouse=True)
+def _no_macos_keychain(monkeypatch):
+    """Disable the macOS Keychain credential lookup for the entire module.
+
+    Why: resolve_anthropic_token() / read_claude_code_credentials() read the
+    "Claude Code-credentials" entry from the macOS Keychain when present.
+    Without this fixture, a developer machine with Claude Code installed
+    leaks a real credential into tests that assume "no creds available".
+    CI runs on Linux where the keychain path returns None implicitly.
+    """
+    monkeypatch.setattr(
+        "agent.anthropic_adapter._read_claude_code_credentials_from_keychain",
+        lambda: None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
