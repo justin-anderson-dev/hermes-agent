@@ -1,0 +1,46 @@
+# Context manifest for later AI-SDLC phases.
+# Replace these scaffold summaries with repo-specific content during bootstrap.
+
+version: 1
+last_bootstrapped: null
+entries:
+  - id: product-overview
+    category: product
+    path: docs/product/overview.md
+    summary: Scaffold only. Bootstrap this file before relying on it for product context.
+    source_paths: []
+    confidence: low
+    last_verified: null
+    status: scaffold-only
+  - id: architecture-overview
+    category: architecture
+    path: docs/architecture/overview.md
+    summary: Scaffold only. Bootstrap this file before relying on it for architecture context.
+    source_paths: []
+    confidence: low
+    last_verified: null
+    status: scaffold-only
+  - id: product-glossary
+    category: product
+    path: docs/product/glossary.md
+    summary: Scaffold only. Bootstrap this file before relying on it for terminology.
+    source_paths: []
+    confidence: low
+    last_verified: null
+    status: scaffold-only
+  - id: repo-map
+    category: context
+    path: docs/context/repo-map.md
+    summary: Scaffold only. Replace starter paths with the repo entrypoints future work should read first.
+    source_paths: []
+    confidence: low
+    last_verified: null
+    status: scaffold-only
+  - id: constitution
+    category: governance
+    path: .specify/memory/constitution.md
+    summary: Bootstrap or review this file before depending on it as project-specific guidance.
+    source_paths: []
+    confidence: low
+    last_verified: null
+    status: scaffold-only

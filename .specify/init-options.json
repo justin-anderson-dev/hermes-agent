@@ -1,0 +1,11 @@
+{
+  "ai": "claude",
+  "integration": "claude",
+  "branch_numbering": "sequential",
+  "context_file": "CLAUDE.md",
+  "here": true,
+  "preset": "aisdlc-core",
+  "script": "sh",
+  "speckit_version": "0.8.11",
+  "ai_skills": true
+}

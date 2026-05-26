@@ -1,0 +1,143 @@
+schema_version: "1.0"
+hooks:
+  before_specify:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.preflight
+      optional: false
+      description: Review the constitution and project context before writing the
+        specification.
+    - extension: git
+      command: speckit.git.feature
+      optional: false
+      description: Create feature branch before specification
+  before_plan:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.preflight
+      optional: false
+      description: Review the constitution and project context before planning.
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before planning?
+      description: Auto-commit before implementation planning
+  before_implement:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.preflight
+      optional: false
+      description: Review the constitution, plan, and project docs before implementation.
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before implementation?
+      description: Auto-commit before implementation
+  after_plan:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.promote
+      optional: true
+      prompt: Review durable planning decisions and record AI-SDLC promotion
+        recommendations?
+      description: Record planned promotion candidates after planning.
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit plan changes?
+      description: Auto-commit after implementation planning
+  after_specify:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.mockup
+      optional: true
+      prompt: Generate static UI mockups for UI-relevant stories in the feature spec?
+      description: Create reviewable UI mockups and handoff notes after specification.
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit specification changes?
+      description: Auto-commit after specification
+  after_implement:
+    - extension: aisdlc-context
+      command: speckit.aisdlc.promote
+      optional: true
+      prompt: Review implementation changes and recommend what should be promoted into
+        durable docs?
+      description: Recommend promotion after implementation.
+    - extension: bugfix
+      command: speckit.bugfix.verify
+      optional: true
+      prompt: Run bugfix consistency check after implementation?
+      description: Verify spec artifact consistency after implementation completes
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit implementation changes?
+      description: Auto-commit after implementation
+  before_constitution:
+    - extension: git
+      command: speckit.git.initialize
+      optional: false
+      description: Initialize Git repository before constitution setup
+  before_clarify:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before clarification?
+      description: Auto-commit before spec clarification
+  before_tasks:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before task generation?
+      description: Auto-commit before task generation
+  before_checklist:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before checklist?
+      description: Auto-commit before checklist generation
+  before_analyze:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before analysis?
+      description: Auto-commit before analysis
+  before_taskstoissues:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit outstanding changes before issue sync?
+      description: Auto-commit before tasks-to-issues conversion
+  after_constitution:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit constitution changes?
+      description: Auto-commit after constitution update
+  after_clarify:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit clarification changes?
+      description: Auto-commit after spec clarification
+  after_tasks:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit task changes?
+      description: Auto-commit after task generation
+  after_checklist:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit checklist changes?
+      description: Auto-commit after checklist generation
+  after_analyze:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit analysis results?
+      description: Auto-commit after analysis
+  after_taskstoissues:
+    - extension: git
+      command: speckit.git.commit
+      optional: true
+      prompt: Commit after syncing issues?
+      description: Auto-commit after tasks-to-issues conversion

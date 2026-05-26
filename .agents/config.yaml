@@ -1,0 +1,38 @@
+framework:
+  version: 0.13.1
+  source: github.com/Slalom/ai-sdlc-framework
+  auto_update: false
+  spec_kit:
+    version: 0.8.11
+    release_pinned: true
+agents:
+  enabled:
+    - claude-code
+    - github-copilot
+commands:
+  mode: generated
+  source: .specify/templates/commands
+spec_kit:
+  integration: claude
+  preset: aisdlc-core
+  extensions:
+    - git
+    - aisdlc-context
+  community_extensions:
+    - id: bugfix
+      slug: spec-kit-bugfix
+      display_name: Bugfix Workflow
+      source: https://github.com/Quratulain-bilal/spec-kit-bugfix/archive/refs/tags/v1.0.0.zip
+      documentation: https://github.com/Quratulain-bilal/spec-kit-bugfix/blob/main/README.md
+      curated: true
+      extension_id: bugfix
+    - id: iterate
+      slug: spec-kit-iterate
+      display_name: Iterate
+      source: https://github.com/imviancagrace/spec-kit-iterate/archive/refs/tags/v2.0.0.zip
+      documentation: https://github.com/imviancagrace/spec-kit-iterate/blob/main/README.md
+      curated: true
+      extension_id: iterate
+  workflows:
+    - speckit
+    - aisdlc-loop

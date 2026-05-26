@@ -1,0 +1,67 @@
+schema_version: "1.0"
+
+preset:
+  id: "aisdlc-core"
+  name: "AI-SDLC Core Preset"
+  version: "0.5.0"
+  description: "Customizes core Spec Kit commands so the AI-SDLC flow stays grounded in durable repo context."
+  author: "AI-SDLC Framework"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=0.8.11"
+
+provides:
+  templates:
+    - type: "command"
+      name: "speckit.constitution"
+      file: "commands/speckit.constitution.md"
+      description: "Constitution guidance that stays aligned with project documentation."
+      replaces: "speckit.constitution"
+
+    - type: "command"
+      name: "speckit.specify"
+      file: "commands/speckit.specify.md"
+      description: "Specification guidance that grounds new work in durable project context."
+      replaces: "speckit.specify"
+
+    - type: "command"
+      name: "speckit.clarify"
+      file: "commands/speckit.clarify.md"
+      description: "Clarification guidance that uses repo-specific context and existing terminology."
+      replaces: "speckit.clarify"
+
+    - type: "command"
+      name: "speckit.plan"
+      file: "commands/speckit.plan.md"
+      description: "Planning guidance with docs-aware prerequisites and promotion setup."
+      replaces: "speckit.plan"
+
+    - type: "command"
+      name: "speckit.tasks"
+      file: "commands/speckit.tasks.md"
+      description: "Task generation guidance that reflects repo-specific patterns, constraints, and promotion candidates."
+      replaces: "speckit.tasks"
+
+    - type: "command"
+      name: "speckit.analyze"
+      file: "commands/speckit.analyze.md"
+      description: "Consistency analysis grounded in repo-specific context rather than generic expectations."
+      replaces: "speckit.analyze"
+
+    - type: "command"
+      name: "speckit.implement"
+      file: "commands/speckit.implement.md"
+      description: "Implementation guidance with project context hygiene and promotion follow-through."
+      replaces: "speckit.implement"
+
+    - type: "command"
+      name: "speckit.checklist"
+      file: "commands/speckit.checklist.md"
+      description: "Checklist guidance that uses repo-specific terminology, patterns, and constraints."
+      replaces: "speckit.checklist"
+
+tags:
+  - "ai-sdlc"
+  - "project-context"
+  - "preset"
