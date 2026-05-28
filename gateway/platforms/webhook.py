@@ -17,6 +17,13 @@ Each route defines:
     message that gets delivered.  Use for external push notifications
     (Supabase, monitoring alerts, inter-agent pings) where zero LLM cost
     and sub-second delivery matter more than agent reasoning.
+  - self_actor_id: optional string. The actor ID (e.g. the bot's own
+    Linear actor ID) to filter out before spawning an agent. When set,
+    if the incoming payload's ``actor.id`` (or top-level ``actorId``)
+    matches, the request short-circuits with 200
+    ``{"status": "ignored", "reason": "self_action"}`` and no agent
+    runs. Prevents feedback loops when the agent posts to the source
+    platform and the platform fires a webhook back.
 
 Security:
   - HMAC secret is required per route (validated at startup)
@@ -527,9 +534,10 @@ class WebhookAdapter(BasePlatformAdapter):
         # 2400cc05-6505-488f-a284-4f62867d0d43 (the Hermes agent user).
         self_actor_id = route_config.get("self_actor_id", "")
         if self_actor_id:
-            actor_id = (payload.get("actor") or {}).get("id") if isinstance(payload, dict) else None
-            if not actor_id and isinstance(payload, dict):
-                actor_id = payload.get("actorId", "")
+            _actor = payload.get("actor") if isinstance(payload, dict) else None
+            actor_id = (_actor.get("id") if isinstance(_actor, dict) else None) or (
+                payload.get("actorId", "") if isinstance(payload, dict) else ""
+            )
             if actor_id == self_actor_id:
                 logger.info(
                     "[webhook] Pre-flight: self-action on route %s — skipping agent run (actor=%s)",
