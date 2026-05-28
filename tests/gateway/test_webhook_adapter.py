@@ -643,6 +643,183 @@ class TestDeliveryCleanup:
 
 
 # ===================================================================
+# ALF-264: Linear webhookDeliveryId + Alfred self-action pre-flight
+# ===================================================================
+
+
+_ALFRED_LINEAR_ACTOR_ID = "2400cc05-6505-488f-a284-4f62867d0d43"
+
+
+class TestLinearDeliveryIdFromBody:
+    """Fix A — for Linear webhooks, prefer payload['webhookDeliveryId']
+    over a timestamp fallback so provider retries collapse into the
+    idempotency cache.
+    """
+
+    @pytest.mark.asyncio
+    async def test_uses_webhook_delivery_id_from_body(self):
+        """Linear POST without GitHub/Request-ID headers uses the body field."""
+        routes = {"linear": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/linear",
+                json={"webhookDeliveryId": "linear-abc-123", "action": "create"},
+            )
+            assert resp.status == 202
+            data = await resp.json()
+            assert data["delivery_id"] == "linear-abc-123"
+            # And the idempotency cache must contain that key
+            assert "linear-abc-123" in adapter._seen_deliveries
+
+    @pytest.mark.asyncio
+    async def test_duplicate_linear_webhook_delivery_id_returns_duplicate(self):
+        """A second POST with the same webhookDeliveryId returns duplicate."""
+        routes = {"linear": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            body = {"webhookDeliveryId": "linear-dup-1", "action": "create"}
+            resp1 = await cli.post("/webhooks/linear", json=body)
+            assert resp1.status == 202
+
+            resp2 = await cli.post("/webhooks/linear", json=body)
+            assert resp2.status == 200
+            data = await resp2.json()
+            assert data["status"] == "duplicate"
+            assert data["delivery_id"] == "linear-dup-1"
+
+    @pytest.mark.asyncio
+    async def test_github_delivery_header_still_wins(self):
+        """X-GitHub-Delivery still takes precedence over body field."""
+        routes = {"linear": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/linear",
+                json={"webhookDeliveryId": "body-id"},
+                headers={"X-GitHub-Delivery": "header-id"},
+            )
+            data = await resp.json()
+            assert data["delivery_id"] == "header-id"
+
+
+class TestAlfredSelfActionPreflight:
+    """Fix B — pre-flight skip when actor.id matches the route's
+    configured self_actor_id, preventing feedback loops.
+    """
+
+    @pytest.mark.asyncio
+    async def test_self_action_returns_ignored(self):
+        """Linear POST with Alfred's actor ID skips agent spawn."""
+        routes = {
+            "linear": {
+                "secret": _INSECURE_NO_AUTH,
+                "prompt": "x",
+                "self_actor_id": _ALFRED_LINEAR_ACTOR_ID,
+            }
+        }
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/linear",
+                json={
+                    "webhookDeliveryId": "self-1",
+                    "actor": {"id": _ALFRED_LINEAR_ACTOR_ID},
+                },
+            )
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "ignored"
+            assert data["reason"] == "self_action"
+
+        # Agent must not have been spawned
+        adapter.handle_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_other_actor_proceeds_normally(self):
+        """Linear POST with a different actor ID still spawns the agent."""
+        routes = {
+            "linear": {
+                "secret": _INSECURE_NO_AUTH,
+                "prompt": "x",
+                "self_actor_id": _ALFRED_LINEAR_ACTOR_ID,
+            }
+        }
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/linear",
+                json={
+                    "webhookDeliveryId": "other-1",
+                    "actor": {"id": "11111111-2222-3333-4444-555555555555"},
+                },
+            )
+            assert resp.status == 202
+
+        adapter.handle_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_actor_id_flat_field_also_matches(self):
+        """Some Linear payload shapes use top-level actorId instead of actor.id."""
+        routes = {
+            "linear": {
+                "secret": _INSECURE_NO_AUTH,
+                "prompt": "x",
+                "self_actor_id": _ALFRED_LINEAR_ACTOR_ID,
+            }
+        }
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/linear",
+                json={
+                    "webhookDeliveryId": "self-flat",
+                    "actorId": _ALFRED_LINEAR_ACTOR_ID,
+                },
+            )
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "ignored"
+            assert data["reason"] == "self_action"
+        adapter.handle_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_route_without_self_actor_id_does_not_filter(self):
+        """Routes that don't configure self_actor_id skip the filter entirely."""
+        routes = {"generic": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        adapter = _make_adapter(routes=routes)
+        adapter.handle_message = AsyncMock()
+
+        app = _create_app(adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/webhooks/generic",
+                json={"actor": {"id": _ALFRED_LINEAR_ACTOR_ID}},
+            )
+            assert resp.status == 202
+
+        adapter.handle_message.assert_awaited_once()
+
+
+# ===================================================================
 # check_webhook_requirements
 # ===================================================================
 
