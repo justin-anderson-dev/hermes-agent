@@ -487,10 +487,15 @@ class WebhookAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.warning("[webhook] Skill loading failed: %s", e)
 
-        # Build a unique delivery ID
-        delivery_id = request.headers.get(
-            "X-GitHub-Delivery",
-            request.headers.get("X-Request-ID", str(int(time.time() * 1000))),
+        # Build a unique delivery ID. Linear webhooks include a stable
+        # `webhookDeliveryId` in the body — preferring it over a timestamp
+        # fallback means provider retries collapse into the idempotency
+        # cache instead of spawning duplicate agent runs.
+        delivery_id = (
+            request.headers.get("X-GitHub-Delivery")
+            or request.headers.get("X-Request-ID")
+            or (payload.get("webhookDeliveryId") if isinstance(payload, dict) else None)
+            or str(int(time.time() * 1000))
         )
 
         # ── Idempotency ─────────────────────────────────────────
@@ -511,6 +516,29 @@ class WebhookAdapter(BasePlatformAdapter):
                 status=200,
             )
         self._seen_deliveries[delivery_id] = now
+
+        # ── Pre-flight self-action filter ───────────────────────
+        # Alfred's own Linear actions — skip to prevent feedback loops where
+        # an action Alfred takes (creating an issue, posting a comment) fires
+        # a webhook that triggers another Alfred run on the same event.
+        #
+        # Configurable via route_config['self_actor_id']; only routes that set
+        # this opt into filtering. For Linear, Alfred's actor ID is
+        # 2400cc05-6505-488f-a284-4f62867d0d43 (the Hermes agent user).
+        self_actor_id = route_config.get("self_actor_id", "")
+        if self_actor_id:
+            actor_id = (payload.get("actor") or {}).get("id") if isinstance(payload, dict) else None
+            if not actor_id and isinstance(payload, dict):
+                actor_id = payload.get("actorId", "")
+            if actor_id == self_actor_id:
+                logger.info(
+                    "[webhook] Pre-flight: self-action on route %s — skipping agent run (actor=%s)",
+                    route_name,
+                    actor_id,
+                )
+                return web.json_response(
+                    {"status": "ignored", "reason": "self_action"}, status=200
+                )
 
         # ── Direct delivery mode (deliver_only) ─────────────────
         # Skip the agent entirely — the rendered prompt IS the message we
