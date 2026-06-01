@@ -74,3 +74,25 @@ models-dev-upstream/
 hermes_cli/tui_dist/*
 hermes_cli/scripts/
 docs/superpowers/*
+
+# ── AI-SDLC / Spec-Kit framework (untracked on custom/main; kept on disk) ──
+# Regenerate with `aisdlc init` using .specify/init-options.json. Removed from
+# version control to keep custom/main close to upstream; see
+# docs/fork-divergence-analysis.md. Re-introduce deliberately (likely confined
+# to .specify/ and not touching AGENTS.md) if the team adopts it for real.
+/CLAUDE.md
+/specs/
+/.specify/
+/.agents/
+/.claude/
+/.github/agents/
+/.github/chatmodes/
+/.github/instructions/
+/.github/prompts/
+/.github/copilot-instructions.md
+/docs/README.md
+/docs/architecture/
+/docs/context/
+/docs/decisions/
+/docs/patterns/
+/docs/product/
