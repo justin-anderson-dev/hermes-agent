@@ -109,7 +109,6 @@ AUTHOR_MAP = {
     "101180447+worlldz@users.noreply.github.com": "worlldz",
     "zhanganzhe@tenclass.com": "luoyuctl",
     "51604064+luoyuctl@users.noreply.github.com": "luoyuctl",
-    "justin-anderson-dev@users.noreply.github.com": "justin-anderson-dev",
     "127238744+teknium1@users.noreply.github.com": "teknium1",
     "tolle.lege+github@gmail.com": "InB4DevOps",
     "73686890+InB4DevOps@users.noreply.github.com": "InB4DevOps",
@@ -330,10 +329,6 @@ AUTHOR_MAP = {
     "thomasjhon6666@gmail.com": "ThomassJonax",
     "focusflow.app.help@gmail.com": "yes999zc",
     "rob@atlas.lan": "rmoen",
-    "justand@gmail.com": "justin-anderson-dev",
-    "justin@justinanderson.dev": "justin-anderson-dev",
-    "justin@justin-anderson.dev": "justin-anderson-dev",
-    "justin@watchworddigital.com": "justin-anderson-dev",
     # Slack ephemeral slash-ack salvage (May 2026)
     "probepark@users.noreply.github.com": "probepark",
     # Slack batch salvage (May 2026)

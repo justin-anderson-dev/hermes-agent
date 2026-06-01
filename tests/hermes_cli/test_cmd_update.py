@@ -113,62 +113,55 @@ class TestCmdUpdateBranchFallback:
     ):
         from hermes_cli import main as hm
 
-        mock_which.side_effect = {
-            "uv": "/usr/bin/uv",
-            "npm": "/usr/bin/npm",
-            "pnpm": "/usr/bin/pnpm",
-        }.get
+        mock_which.side_effect = {"uv": "/usr/bin/uv", "npm": "/usr/bin/npm"}.get
         mock_run.side_effect = _make_run_side_effect(
             branch="main", verify_ok=True, commit_count="1"
         )
         with patch.object(hm, "_is_termux_env", return_value=False):
             cmd_update(mock_args)
 
-        pm_calls = [
+        npm_calls = [
             (call.args[0], call.kwargs.get("cwd"))
             for call in mock_run.call_args_list
-            if call.args and call.args[0][0] in ("/usr/bin/npm", "/usr/bin/pnpm")
+            if call.args and call.args[0][0] == "/usr/bin/npm"
         ]
 
-        # cmd_update runs node package manager commands in three locations:
-        #   1. repo root  — pnpm workspace (post-pnpm migration); installs
-        #                   omit `--silent` and run without `capture_output`
-        #                   so optional postinstall scripts (e.g.
-        #                   `@askjo/camofox-browser`'s browser-binary fetch)
-        #                   print progress — otherwise long downloads look
-        #                   like a hang (#18840).
-        #   2. ui-tui/    — npm + package-lock.json; same streaming behaviour
-        #                   for the same #18840 reason.
-        #   3. web/       — `npm ci --silent` + `npm run build`.
-        npm_full_flags = [
+        # cmd_update runs npm commands in three locations:
+        #   1. repo root  — slash-command / TUI bridge deps
+        #   2. ui-tui/    — Ink TUI deps
+        #   3. web/       — install + "npm run build" for the web frontend
+        #
+        # Repo-root and ui-tui installs intentionally omit `--silent` and run
+        # without `capture_output` so optional postinstall scripts (e.g.
+        # `@askjo/camofox-browser`'s browser-binary fetch) print progress —
+        # otherwise long downloads look like a hang (#18840).  The web/ install
+        # keeps `--silent` because its build step is short and noisy.
+        update_flags = [
             "/usr/bin/npm",
             "ci",
             "--no-fund",
             "--no-audit",
             "--progress=false",
         ]
-        assert pm_calls[:2] == [
-            (
-                ["/usr/bin/pnpm", "install", "--frozen-lockfile"],
-                PROJECT_ROOT,
-            ),
-            (npm_full_flags, PROJECT_ROOT / "ui-tui"),
+        assert npm_calls[:2] == [
+            (update_flags, PROJECT_ROOT),
+            (update_flags, PROJECT_ROOT / "ui-tui"),
         ]
-        if len(pm_calls) > 2:
-            assert pm_calls[2:] == [
+        if len(npm_calls) > 2:
+            assert npm_calls[2:] == [
                 (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT / "web"),
                 (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "web"),
             ]
 
-        # Regression for #18840: repo root (pnpm) + ui-tui (npm) installs
-        # must stream output (capture_output=False) so postinstall progress
-        # is visible to the user.
+        # Regression for #18840: repo root + ui-tui installs must stream
+        # output (capture_output=False) so postinstall progress is visible
+        # to the user.
         repo_and_tui_calls = [
             call
             for call in mock_run.call_args_list
             if call.args
-            and call.args[0][0] in ("/usr/bin/pnpm", "/usr/bin/npm")
-            and call.args[0][1] in ("install", "ci")
+            and call.args[0][0] == "/usr/bin/npm"
+            and call.args[0][1] == "ci"
             and call.kwargs.get("cwd") in {PROJECT_ROOT, PROJECT_ROOT / "ui-tui"}
         ]
         assert len(repo_and_tui_calls) == 2

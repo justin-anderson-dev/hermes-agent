@@ -23,7 +23,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -80,12 +80,6 @@ jobs:
           OPENROUTER_API_KEY: ""
           OPENAI_API_KEY: ""
           NOUS_API_KEY: ""
-          # Cap parallel subprocesses to the runner's vCPU count.
-          # The default (cpu_count*2 = 4) spawns too many concurrent pytest
-          # processes on the 2-vCPU/7GB GitHub runner, causing the runner to
-          # receive a shutdown signal from infrastructure memory pressure
-          # before the suite completes.
-          HERMES_TEST_WORKERS: "2"
 
   e2e:
     runs-on: ubuntu-latest

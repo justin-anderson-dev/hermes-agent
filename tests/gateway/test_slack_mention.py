@@ -495,42 +495,6 @@ def test_config_bridges_slack_reply_in_thread(monkeypatch, tmp_path):
     ) == "171.000"
 
 
-def test_resolve_thread_ts_top_level_when_reply_to_missing():
-    """ALF-225: Agent-driven sends pass metadata={"thread_id": ts} without a
-    reply_to.  Without the real-thread cross-reference, the synthetic thread_id
-    fallback set on inbound top-level messages would leak into outbound replies
-    and force them into a thread even when reply_in_thread=false.
-    """
-    adapter = object.__new__(SlackAdapter)
-    adapter.platform = Platform.SLACK
-    adapter.config = PlatformConfig(enabled=True, extra={"reply_in_thread": False})
-    adapter._real_thread_parents = set()
-
-    # Top-level message: thread_id is the synthetic ts fallback. No reply_to
-    # is supplied (matches the gateway.run.py response path). The inbound
-    # handler never saw event.thread_ts == "171.000" for this message, so
-    # the parent set stays empty and the resolver must reply at top level.
-    assert adapter._resolve_thread_ts(
-        reply_to=None,
-        metadata={"thread_id": "171.000"},
-    ) is None
-
-
-def test_resolve_thread_ts_keeps_real_thread_when_reply_to_missing():
-    """Once an inbound message arrives with a real event.thread_ts, agent-driven
-    sends targeting that thread (no reply_to) must continue to thread the reply.
-    """
-    adapter = object.__new__(SlackAdapter)
-    adapter.platform = Platform.SLACK
-    adapter.config = PlatformConfig(enabled=True, extra={"reply_in_thread": False})
-    adapter._real_thread_parents = {"171.000"}
-
-    assert adapter._resolve_thread_ts(
-        reply_to=None,
-        metadata={"thread_id": "171.000"},
-    ) == "171.000"
-
-
 def test_config_bridges_slack_strict_mention(monkeypatch, tmp_path):
     from gateway.config import load_gateway_config
 

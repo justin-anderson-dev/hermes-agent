@@ -26,7 +26,7 @@ on:
       - 'uv.lock'
       - 'pyproject.toml'
       - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
       - 'ui-tui/package.json'
       - 'ui-tui/package-lock.json'
       - 'website/package.json'
@@ -38,7 +38,7 @@ on:
       - 'uv.lock'
       - 'pyproject.toml'
       - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
       - 'ui-tui/package-lock.json'
       - 'website/package-lock.json'
   schedule:
@@ -59,10 +59,9 @@ jobs:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
     with:
       # Scan explicit lockfiles rather than recursing, so we only look at
-      # the four sources of truth and skip vendored / test / worktree dirs.
+      # the three sources of truth and skip vendored / test / worktree dirs.
       scan-args: |-
         --lockfile=uv.lock
-        --lockfile=pnpm-lock.yaml
         --lockfile=ui-tui/package-lock.json
         --lockfile=website/package-lock.json
       fail-on-vuln: false

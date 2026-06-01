@@ -29,7 +29,6 @@ if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
 
 from hermes_cli import kanban_db as kb
-from tests._kanban_env import clean_kanban_env
 
 
 # ---------------------------------------------------------------------------
@@ -469,14 +468,8 @@ class TestWorkerSpawnEnv:
 # ---------------------------------------------------------------------------
 
 def _cli(args: list[str], env_extra: dict | None = None) -> subprocess.CompletedProcess:
-    """Run ``hermes kanban …`` with PYTHONPATH pinned to the worktree.
-
-    Strips ``HERMES_KANBAN_DB`` / ``HERMES_KANBAN_HOME`` /
-    ``HERMES_KANBAN_BOARD`` / ``HERMES_KANBAN_WORKSPACES_ROOT`` from the
-    child env via :func:`clean_kanban_env` so a stale operator-shell pin
-    can't route the child to the real kanban DB (ALF-267).
-    """
-    env = clean_kanban_env()
+    """Run ``hermes kanban …`` with PYTHONPATH pinned to the worktree."""
+    env = dict(os.environ)
     env["PYTHONPATH"] = str(_WORKTREE)
     if env_extra:
         env.update(env_extra)
