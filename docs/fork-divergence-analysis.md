@@ -14,6 +14,10 @@ pathways to minimize divergence so future upstream pulls are simpler.
 
 ---
 
+> **Looking for the day-to-day procedure?** This document is the historical
+> analysis and execution log. The concise, ongoing **"how to sync upstream"
+> runbook** lives in [upstream-sync.md](upstream-sync.md).
+
 ## 0. TL;DR
 
 - The diff is **212 files, +23,459 / −4 lines**, but this number is misleading.
