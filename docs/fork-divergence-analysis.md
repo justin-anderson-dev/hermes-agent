@@ -317,24 +317,37 @@ lives on `custom/main`. The genuine fork customizations turned out to be a
   Homebrew/pyenv). **Run the suite — or let CI — before fast-forwarding
   `custom/main`.**
 
-### Remaining steps (need your go-ahead — some are outward-facing)
+### Execution log — COMPLETED 2026-05-31
 
-1. **Review** the `cleanup/minimize-fork-divergence` branch diff.
-2. **Run the test suite** on that branch in your proper env (or via CI).
-3. **Fast-forward `custom/main`** to the review branch (no force-push; it only
-   adds commits) — *after* tests pass.
-4. **Add the real upstream remote:**
-   `git remote add upstream https://github.com/nousresearch/hermes-agent.git`.
-5. **Reset `main` to pristine upstream** (one-time force-push on `main`; *destructive*,
-   outward-facing — explicit confirmation required). Option: reset to `a84cec61c`
-   first (zero disruption), then adopt newer upstream as a deliberate merge.
-6. **ALF-329 caveat:** before discarding `origin/main`'s tip, confirm its
-   "fix 19 failing tests post-rebase" changes (in `test_anthropic_adapter`,
-   `test_memory_monitor`, `test_backup`, `test_gateway_wsl`) aren't needed on
-   `custom/main`. They were likely fixes for the redundant-squash breakage, not
-   genuine upstream-bump fixes — verify via the suite in step 2.
-7. **Going forward:** never commit to `main`; never rebase `custom/main`; merge
-   `main` → `custom/main` per release; enable `git rerere`.
+1. ✅ **Reviewed** the `cleanup/minimize-fork-divergence` branch.
+2. ✅ **Ran the full suite** (25,048 tests): 99.8% pass; all 50 failures proven
+   byte-identical to pristine upstream (environmental — cloud creds, ambient
+   creds, Linux-only systemd/WSL). **Zero regressions.** Both kept features pass.
+   This also cleared the **ALF-329 caveat**: `custom/main` is green (modulo
+   environment) without `origin/main`'s "fix 19 failing tests" commit, so that
+   commit was patching the redundant-squash breakage, not real upstream fixes.
+3. ✅ **Fast-forwarded `custom/main`** `02650f4b1 → cfc1a9de1` and **pushed** to
+   `origin/custom/main`.
+4. ✅ **Added the `upstream` remote** (`nousresearch/hermes-agent`) and fetched.
+5. ✅ **Reset `origin/main` to pristine `a84cec61c`** (v2026.5.16 base) via
+   `--force-with-lease`. `custom/main` now sits cleanly on top of it; divergence
+   is exactly the 6 files above.
+6. ✅ **Enabled `git rerere`.**
+
+### Remaining (optional / when ready)
+
+- **Branch protection (GitHub settings, your task):** keep default branch =
+  `custom/main`; protect `main` as fast-forward-only / no direct commits.
+- **Adopt the latest release (Phase E):** public upstream is at **`b3aaf2676`
+  (v2026.5.29.2)**, ahead of the `v2026.5.16` base `main` now points to. When
+  ready: `git fetch upstream && git checkout main && git merge --ff-only
+  upstream/main && git push origin main`, then `git checkout custom/main && git
+  merge main` (only the 4 ALF files can conflict), test, push.
+- **Steady-state rule:** never commit to `main`; never rebase `custom/main`;
+  merge `main` → `custom/main` per release.
+- **Framework on disk:** the gitignored ai-sdlc files were removed from disk
+  during the branch switch (recoverable from `a2b1b20e5` or `aisdlc init`);
+  restore on request.
 
 ---
 
