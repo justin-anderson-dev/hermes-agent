@@ -334,19 +334,34 @@ lives on `custom/main`. The genuine fork customizations turned out to be a
    is exactly the 6 files above.
 6. ✅ **Enabled `git rerere`.**
 
-### Remaining (optional / when ready)
+### Release adoption — COMPLETED 2026-05-31 (v2026.5.29.2)
 
-- **Branch protection (GitHub settings, your task):** keep default branch =
-  `custom/main`; protect `main` as fast-forward-only / no direct commits.
-- **Adopt the latest release (Phase E):** public upstream is at **`b3aaf2676`
-  (v2026.5.29.2)**, ahead of the `v2026.5.16` base `main` now points to. When
-  ready: `git fetch upstream && git checkout main && git merge --ff-only
-  upstream/main && git push origin main`, then `git checkout custom/main && git
-  merge main` (only the 4 ALF files can conflict), test, push.
-- **Steady-state rule:** never commit to `main`; never rebase `custom/main`;
-  merge `main` → `custom/main` per release.
+7. ✅ **Branch protection** configured: `main` ruleset `main-fast-forward-only`
+   (`non_fast_forward` + `deletion`), active; default branch `custom/main`
+   protected against deletion. (Direct FF pushes to `main` still allowed — the
+   mirror workflow.)
+8. ✅ **Fast-forwarded `main` `a84cec61c → b3aaf2676`** (v2026.5.29.2 + 345) from
+   `upstream/main` and pushed to `origin/main`.
+9. ✅ **Merged `main` into `custom/main`** (950 upstream commits). Only **2 real
+   conflicts**, both resolved: `webhook.py` (merged upstream's `svix-id` header
+   into ALF-264's delivery-id chain) and `.gitignore` (kept upstream's new
+   entries + the framework block). `gateway.py`/`test_*` auto-merged. `rerere`
+   recorded both resolutions.
+10. ✅ **Validated**: targeted ALF-263/ALF-264 tests pass (202 passed; only the 6
+    known macOS-systemd platform failures). Full-suite background run for
+    belt-and-suspenders confirmation.
+11. ✅ **Pushed `custom/main`** (`07cde2c2b`). Divergence from `origin/main` is
+    still exactly **6 files**.
+
+### Steady-state (going forward)
+
+- Never commit to `main`; never rebase `custom/main`; per release:
+  `git fetch upstream && git checkout main && git merge --ff-only upstream/main
+  && git push origin main`, then `git checkout custom/main && git merge main`
+  (only the ~4 ALF files can conflict; `rerere` replays known resolutions),
+  test, push.
 - **Framework on disk:** the gitignored ai-sdlc files were removed from disk
-  during the branch switch (recoverable from `a2b1b20e5` or `aisdlc init`);
+  during a branch switch (recoverable from `a2b1b20e5` or `aisdlc init`);
   restore on request.
 
 ---
