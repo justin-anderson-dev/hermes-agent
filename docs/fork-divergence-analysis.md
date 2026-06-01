@@ -267,6 +267,77 @@ one small patch (or nothing, once A2 lands) → regenerate framework if desired.
 
 ---
 
+---
+
+## ✅ Agreed plan & execution status (updated 2026-05-31)
+
+After reviewing the catalog above, we refined the topology understanding and made
+concrete decisions. **`origin/main` is the fork's own integration branch and its
+"custom fork patches" layer was a mistake** — going forward `main` should mirror
+pristine public upstream (`nousresearch/hermes-agent`) and *all* customization
+lives on `custom/main`. The genuine fork customizations turned out to be a
+15-commit series (ALF-225 → ALF-268) on top of the v2026.5.16 base
+(`a84cec61c`), of which we keep only two.
+
+### Decisions
+
+| Group | Decision | Rationale |
+|---|---|---|
+| ai-sdlc framework | **Remove from VC** (keep on disk, gitignore) | Regenerable tooling; not yet used; was 209 of 212 changed files |
+| pnpm migration (E) | **Revert to upstream** | Perpetual npm/pnpm conflict source; not worth it |
+| conftest/test-infra (F) | **Revert to upstream** | High-churn shared file; heavy conflict risk |
+| Slack threading fixes (A) | **Revert (drop)** | Only relevant with `reply_in_thread=false`, which we don't run |
+| execute_code emoji (G) | **Revert (drop)** | Cosmetic; needless conflict point |
+| kanban tests (C), docs (H) | **Revert to upstream** | Not essential |
+| **ALF-263 launchd (D)** | **KEEP** | Deployment necessity (launchd fd limit); ~zero conflict |
+| **ALF-264 webhook (B)** | **KEEP** | Genuine feature; builds cleanly on upstream scaffolding |
+| Execution style | **Revert-forward** (no force-push on `custom/main`) | It's the shared default branch |
+
+### What was executed (on review branch `cleanup/minimize-fork-divergence`)
+
+`custom/main` was **not** modified. A review branch was cut from it with three commits:
+
+1. `docs: add fork divergence analysis report`
+2. `chore: untrack ai-sdlc-framework, keep on disk via .gitignore` — 209 files `git rm --cached`, kept on disk, gitignored
+3. `revert: restore non-essential fork customizations to upstream` — 30 files reconciled to the upstream base; `webhook.py`/`test_webhook_adapter.py` rebuilt as *upstream + ALF-264 only* (ALF-245/PR#14 hunks stripped)
+
+**Resulting divergence from pristine upstream (`a84cec61c`): 6 files** —
+`gateway/platforms/webhook.py` + `tests/gateway/test_webhook_adapter.py` (ALF-264),
+`hermes_cli/gateway.py` + `tests/hermes_cli/test_gateway_service.py` (ALF-263),
+`.gitignore` (framework ignores), and this report. Down from 212.
+
+### Verification status
+
+- **Structural: PASS.** ALF-263 and ALF-264 both cherry-pick onto pristine
+  upstream with **zero conflicts**; the kept test files are taken verbatim from
+  those clean cherry-picks; the final tracked diff vs upstream is *exactly* the
+  four keep-files (line counts match the original commit stats).
+- **Test run: NOT performed locally.** The codebase requires Python ≥3.10
+  (runtime `str | object`), and this machine only has Xcode's Python 3.9.6 (no
+  Homebrew/pyenv). **Run the suite — or let CI — before fast-forwarding
+  `custom/main`.**
+
+### Remaining steps (need your go-ahead — some are outward-facing)
+
+1. **Review** the `cleanup/minimize-fork-divergence` branch diff.
+2. **Run the test suite** on that branch in your proper env (or via CI).
+3. **Fast-forward `custom/main`** to the review branch (no force-push; it only
+   adds commits) — *after* tests pass.
+4. **Add the real upstream remote:**
+   `git remote add upstream https://github.com/nousresearch/hermes-agent.git`.
+5. **Reset `main` to pristine upstream** (one-time force-push on `main`; *destructive*,
+   outward-facing — explicit confirmation required). Option: reset to `a84cec61c`
+   first (zero disruption), then adopt newer upstream as a deliberate merge.
+6. **ALF-329 caveat:** before discarding `origin/main`'s tip, confirm its
+   "fix 19 failing tests post-rebase" changes (in `test_anthropic_adapter`,
+   `test_memory_monitor`, `test_backup`, `test_gateway_wsl`) aren't needed on
+   `custom/main`. They were likely fixes for the redundant-squash breakage, not
+   genuine upstream-bump fixes — verify via the suite in step 2.
+7. **Going forward:** never commit to `main`; never rebase `custom/main`; merge
+   `main` → `custom/main` per release; enable `git rerere`.
+
+---
+
 ## Appendix — commands used
 
 ```bash
