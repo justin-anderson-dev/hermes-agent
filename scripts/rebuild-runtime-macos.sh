@@ -157,12 +157,22 @@ command_exists() {
 }
 
 resolve_real_home() {
-    REAL_HOME="$(python3 - <<'PY'
+    REAL_HOME=""
+
+    if command_exists python3; then
+        REAL_HOME="$(python3 - <<'PY'
 import os
 import pwd
 print(pwd.getpwuid(os.getuid()).pw_dir)
 PY
 )"
+    elif command_exists dscl; then
+        REAL_HOME="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory 2>/dev/null | awk '/NFSHomeDirectory:/ {print $2}' | head -n 1)"
+    fi
+
+    if [[ -z "$REAL_HOME" ]]; then
+        REAL_HOME="$HOME"
+    fi
 }
 
 resolve_repo_root() {
@@ -307,7 +317,7 @@ preview_multiline() {
     if [[ -z "$text" ]]; then
         return 0
     fi
-    printf '%s' "$text" | python3 -c '
+    printf '%s' "$text" | "$PYTHON_BIN" -c '
 import sys
 limit = int(sys.argv[1])
 lines = sys.stdin.read().splitlines()
@@ -323,7 +333,7 @@ get_editable_location() {
 }
 
 normalize_path() {
-    python3 - "$1" <<'PY'
+    "$PYTHON_BIN" - "$1" <<'PY'
 import os
 import sys
 print(os.path.realpath(sys.argv[1]))
@@ -351,11 +361,15 @@ print_launchd_detection() {
     local plist
     for plist in "${plists[@]}"; do
         local label
+        local stdout_file
+        local stderr_file
         label="$(basename "$plist" .plist)"
+        stdout_file="$(mktemp "/tmp/${label}.launchctl.stdout.XXXXXX")"
+        stderr_file="$(mktemp "/tmp/${label}.launchctl.stderr.XXXXXX")"
         printf '    %s\n' "$plist"
-        if launchctl list "$label" >/tmp/${label}.launchctl.stdout 2>/tmp/${label}.launchctl.stderr; then
+        if launchctl list "$label" >"$stdout_file" 2>"$stderr_file"; then
             printf '      loaded: yes (%s)\n' "$label"
-            python3 - "/tmp/${label}.launchctl.stdout" <<'PY'
+            "$PYTHON_BIN" - "$stdout_file" <<'PY'
 from pathlib import Path
 path = Path(__import__('sys').argv[1])
 for raw in path.read_text(encoding='utf-8', errors='replace').splitlines():
@@ -366,6 +380,7 @@ PY
         else
             printf '      loaded: no (%s)\n' "$label"
         fi
+        rm -f "$stdout_file" "$stderr_file"
         if [[ -z "$GATEWAY_PLIST_DISPLAY" ]]; then
             GATEWAY_PLIST_DISPLAY="$plist"
             GATEWAY_LABEL_DISPLAY="$label"
