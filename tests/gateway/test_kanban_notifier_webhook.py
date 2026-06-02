@@ -251,6 +251,21 @@ def test_webhook_delivery_rebinds_zero_host_to_loopback():
     assert session.calls[0]["url"].startswith("http://127.0.0.1:8647/")
 
 
+def test_webhook_delivery_brackets_ipv6_host_literal():
+    runner = _make_runner()
+    adapter = _make_webhook_adapter(host="::1", port=8648)
+    runner.adapters[Platform.WEBHOOK] = adapter
+    session = _FakeSession()
+    sub = {"task_id": "t_abc", "platform": "webhook", "chat_id": "kanban-completion"}
+
+    with _patch_aiohttp(session):
+        asyncio.run(runner._kanban_deliver_webhook_event(
+            sub=sub, event=_make_event(), task=None, board="b",
+        ))
+
+    assert session.calls[0]["url"] == "http://[::1]:8648/webhooks/kanban-completion"
+
+
 # ---------------------------------------------------------------------------
 # Watcher branching (in-memory DB)
 # ---------------------------------------------------------------------------

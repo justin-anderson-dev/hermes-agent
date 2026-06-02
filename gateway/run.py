@@ -5182,14 +5182,14 @@ class GatewayRunner:
                     board_slug = d.get("board")
                     platform_str = (sub["platform"] or "").lower()
 
-                    # Pub/sub bridge: route webhook-platform subscriptions
-                    # whose chat_id names a configured webhook route into
-                    # the local webhook adapter as authenticated JSON
-                    # POSTs, instead of falling through to adapter.send
-                    # (which expects a plain-text chat message). Preserve the
-                    # current claim/rewind notifier behavior: failures rewind
-                    # the claimed cursor for retry, and only a truly final
-                    # task status drops the subscription.
+                    # Pub/sub bridge: route the reserved webhook
+                    # ``chat_id == "kanban-completion"`` subscription into
+                    # the local webhook adapter as authenticated JSON POSTs,
+                    # instead of falling through to adapter.send (which
+                    # expects a plain-text chat message). Preserve the current
+                    # claim/rewind notifier behavior: failures rewind the
+                    # claimed cursor for retry, and only a truly final task
+                    # status drops the subscription.
                     if platform_str == "webhook" and (sub.get("chat_id") or "") == "kanban-completion":
                         sub_key = (
                             sub["task_id"], sub["platform"],
@@ -5583,11 +5583,27 @@ class GatewayRunner:
             secret.encode("utf-8"), body_bytes, _hashlib.sha256,
         ).hexdigest()
 
-        host = adapter._host or "127.0.0.1"
+        host = (adapter._host or "127.0.0.1").strip()
         if host in ("0.0.0.0", ""):
             host = "127.0.0.1"
+        elif host in ("::", "[::]"):
+            host = "::1"
+
+        host_for_url = host
+        try:
+            from ipaddress import ip_address as _ip_address
+
+            parsed_host = host[1:-1] if host.startswith("[") and host.endswith("]") else host
+            if _ip_address(parsed_host).version == 6:
+                host_for_url = f"[{parsed_host}]"
+            else:
+                host_for_url = parsed_host
+        except ValueError:
+            # Not an IP literal (likely a hostname); use as configured.
+            host_for_url = host
+
         port = int(adapter._port)
-        url = f"http://{host}:{port}/webhooks/{route_name}"
+        url = f"http://{host_for_url}:{port}/webhooks/{route_name}"
         headers = {
             "Content-Type": "application/json",
             "X-Webhook-Signature": signature,
