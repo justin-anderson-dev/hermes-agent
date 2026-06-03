@@ -736,6 +736,77 @@ class TestLoadGatewayConfig:
         import os
         assert os.environ.get("TELEGRAM_PROXY") == "socks5://from-env:1080"
 
+    def test_bridges_session_store_max_age_days_from_config_yaml(self, tmp_path, monkeypatch):
+        """Top-level session_store_max_age_days in config.yaml must reach
+        GatewayConfig.session_store_max_age_days. Regression for ALF-248 —
+        without the bridge the loader silently ignored the YAML key and kept
+        the 90-day default, leaving sessions.json unbounded on long-running
+        gateways."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        (hermes_home / "config.yaml").write_text(
+            "session_store_max_age_days: 14\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        config = load_gateway_config()
+
+        assert config.session_store_max_age_days == 14
+
+    def test_session_store_max_age_days_zero_disables_pruning(self, tmp_path, monkeypatch):
+        """0 means pruning disabled — must round-trip without falling back to 90."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        (hermes_home / "config.yaml").write_text(
+            "session_store_max_age_days: 0\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        config = load_gateway_config()
+
+        assert config.session_store_max_age_days == 0
+
+    def test_session_store_max_age_days_invalid_falls_back_to_default(
+        self, tmp_path, monkeypatch
+    ):
+        """Bad value in YAML must not crash load_gateway_config — fall back to 90."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        (hermes_home / "config.yaml").write_text(
+            "session_store_max_age_days: not-a-number\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        config = load_gateway_config()
+
+        assert config.session_store_max_age_days == 90
+
+    def test_session_store_max_age_days_negative_coerced_to_zero(
+        self, tmp_path, monkeypatch
+    ):
+        """Negative values are nonsensical — coerce to 0 (pruning disabled)."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        (hermes_home / "config.yaml").write_text(
+            "session_store_max_age_days: -7\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        config = load_gateway_config()
+
+        assert config.session_store_max_age_days == 0
+
+    def test_session_store_max_age_days_absent_uses_default(self, tmp_path, monkeypatch):
+        """When the key is absent, the 90-day default applies — legacy behavior."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir()
+        (hermes_home / "config.yaml").write_text("{}\n", encoding="utf-8")
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        config = load_gateway_config()
+
+        assert config.session_store_max_age_days == 90
+
 
 class TestHomeChannelEnvOverrides:
     """Home channel env vars should apply even when the platform was already

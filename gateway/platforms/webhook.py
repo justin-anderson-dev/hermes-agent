@@ -219,6 +219,37 @@ class WebhookAdapter(BasePlatformAdapter):
         )
         return True
 
+    async def _process_message_background(
+        self, event: MessageEvent, session_key: str
+    ) -> None:
+        """Run the standard processing pipeline, then end the webhook session.
+
+        Webhook routes are one-shot: each delivery becomes a self-contained
+        session that should be marked ended in SQLite as soon as the agent
+        run + delivery finishes.  Calling ``end_session`` from the
+        ``_handle_webhook`` request handler would fire too early — that
+        handler only schedules background processing and returns 202
+        immediately, long before the agent run completes.  Hooking here
+        means ``ended_at`` is set after the real work is done, on both
+        the success and failure paths.
+        """
+        try:
+            await super()._process_message_background(event, session_key)
+        finally:
+            if self.gateway_runner and hasattr(self.gateway_runner, "session_store"):
+                try:
+                    session_store = self.gateway_runner.session_store
+                    entry = session_store.get_or_create_session(event.source)
+                    if entry and session_store._db:
+                        session_store._db.end_session(
+                            entry.session_id, "webhook_complete"
+                        )
+                except Exception:
+                    logger.exception(
+                        "[webhook] Failed to end session %s",
+                        event.source.chat_id,
+                    )
+
     async def disconnect(self) -> None:
         if self._runner:
             await self._runner.cleanup()
@@ -646,10 +677,13 @@ class WebhookAdapter(BasePlatformAdapter):
             delivery_id,
         )
 
-        # Non-blocking — return 202 Accepted immediately
-        task = asyncio.create_task(self.handle_message(event))
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        # Non-blocking — return 202 Accepted immediately.  ``handle_message``
+        # spawns the real ``_process_message_background`` task internally and
+        # returns once the guard is installed; finalising the webhook session
+        # is the override's responsibility (see ``_process_message_background``
+        # above) so ``ended_at`` is recorded after the agent run + delivery
+        # actually finishes, not when dispatch is set up.
+        await self.handle_message(event)
 
         return web.json_response(
             {

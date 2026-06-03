@@ -773,6 +773,11 @@ def load_gateway_config() -> GatewayConfig:
                     "filter_silence_narration"
                 ]
 
+            if "session_store_max_age_days" in yaml_cfg:
+                gw_data["session_store_max_age_days"] = yaml_cfg[
+                    "session_store_max_age_days"
+                ]
+
             if "unauthorized_dm_behavior" in yaml_cfg:
                 gw_data["unauthorized_dm_behavior"] = _normalize_unauthorized_dm_behavior(
                     yaml_cfg.get("unauthorized_dm_behavior"),
