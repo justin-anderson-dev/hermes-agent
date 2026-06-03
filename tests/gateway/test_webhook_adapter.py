@@ -1362,7 +1362,12 @@ class TestSessionLifecycle:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post("/webhooks/test", json={"data": "value"})
             assert resp.status == 202
-            # handler is asynchronous — should not be done yet when 202 returns
+            # handler is asynchronous — must still be running when 202 returns,
+            # otherwise the test could pass even if the handler ran synchronously
+            assert not handler_done.is_set(), (
+                "Handler completed before 202 was returned — response was not "
+                "sent ahead of the background task"
+            )
             await asyncio.wait_for(end_session_called.wait(), timeout=2.0)
 
         assert order.index("handler_end") < order.index("end_session"), (
