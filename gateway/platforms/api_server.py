@@ -102,10 +102,40 @@ def _coerce_request_bool(value: Any, default: bool = False) -> bool:
             return True
         if normalized in _FALSE_REQUEST_BOOL_STRINGS:
             return False
-        return default
     if isinstance(value, (int, float)):
         return bool(value)
     return default
+
+
+def _coerce_toolset_override(value: Any, field_name: str) -> tuple[Optional[List[str]], Optional[Dict[str, Any]]]:
+    """Validate optional request-scoped toolset override lists."""
+    if value is None:
+        return None, None
+    if not isinstance(value, list):
+        return None, _openai_error(f"'{field_name}' must be a list of strings")
+    normalized: List[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            return None, _openai_error(f"'{field_name}' must contain only strings")
+        name = item.strip()
+        if name and name not in seen:
+            normalized.append(name)
+            seen.add(name)
+    return normalized or None, None
+
+
+def _merge_toolset_denylists(*lists: Optional[List[str]]) -> List[str]:
+    """Merge disabled-toolset lists without letting request overrides widen access."""
+    merged: List[str] = []
+    seen: set[str] = set()
+    for values in lists:
+        for item in values or []:
+            name = str(item).strip()
+            if name and name not in seen:
+                merged.append(name)
+                seen.add(name)
+    return merged
 
 
 def _normalize_chat_content(
@@ -962,6 +992,8 @@ class APIServerAdapter(BasePlatformAdapter):
         tool_start_callback=None,
         tool_complete_callback=None,
         gateway_session_key: Optional[str] = None,
+        enabled_toolsets_override: Optional[List[str]] = None,
+        disabled_toolsets_override: Optional[List[str]] = None,
     ) -> Any:
         """
         Create an AIAgent instance using the gateway's runtime config.
@@ -987,7 +1019,16 @@ class APIServerAdapter(BasePlatformAdapter):
         model = _resolve_gateway_model()
 
         user_config = _load_gateway_config()
-        enabled_toolsets = sorted(_get_platform_tools(user_config, "api_server"))
+        enabled_toolsets = (
+            sorted({str(name).strip() for name in enabled_toolsets_override if str(name).strip()})
+            if enabled_toolsets_override
+            else sorted(_get_platform_tools(user_config, "api_server"))
+        )
+        agent_cfg = user_config.get("agent") or {}
+        disabled_toolsets = _merge_toolset_denylists(
+            agent_cfg.get("disabled_toolsets") or [],
+            disabled_toolsets_override,
+        )
 
         max_iterations = int(os.getenv("HERMES_MAX_ITERATIONS", "90"))
 
@@ -1003,6 +1044,7 @@ class APIServerAdapter(BasePlatformAdapter):
             verbose_logging=False,
             ephemeral_system_prompt=ephemeral_system_prompt or None,
             enabled_toolsets=enabled_toolsets,
+            disabled_toolsets=disabled_toolsets,
             session_id=session_id,
             platform="api_server",
             stream_delta_callback=stream_delta_callback,
@@ -1688,6 +1730,16 @@ class APIServerAdapter(BasePlatformAdapter):
             )
 
         stream = _coerce_request_bool(body.get("stream"), default=False)
+        enabled_toolsets_override, toolset_err = _coerce_toolset_override(
+            body.get("enabled_toolsets"), "enabled_toolsets"
+        )
+        if toolset_err is not None:
+            return web.json_response(toolset_err, status=400)
+        disabled_toolsets_override, toolset_err = _coerce_toolset_override(
+            body.get("disabled_toolsets"), "disabled_toolsets"
+        )
+        if toolset_err is not None:
+            return web.json_response(toolset_err, status=400)
 
         # Extract system message (becomes ephemeral system prompt layered ON TOP of core)
         system_prompt = None
@@ -1868,6 +1920,8 @@ class APIServerAdapter(BasePlatformAdapter):
                 tool_complete_callback=_on_tool_complete,
                 agent_ref=agent_ref,
                 gateway_session_key=gateway_session_key,
+                enabled_toolsets_override=enabled_toolsets_override,
+                disabled_toolsets_override=disabled_toolsets_override,
             ))
             # Ensure SSE drain loops can terminate without relying on polling
             # agent_task.done(), which can race with queue timeout checks.
@@ -1887,11 +1941,13 @@ class APIServerAdapter(BasePlatformAdapter):
                 ephemeral_system_prompt=system_prompt,
                 session_id=session_id,
                 gateway_session_key=gateway_session_key,
+                enabled_toolsets_override=enabled_toolsets_override,
+                disabled_toolsets_override=disabled_toolsets_override,
             )
 
         idempotency_key = request.headers.get("Idempotency-Key")
         if idempotency_key:
-            fp = _make_request_fingerprint(body, keys=["model", "messages", "tools", "tool_choice", "stream"])
+            fp = _make_request_fingerprint(body, keys=["model", "messages", "tools", "tool_choice", "stream", "enabled_toolsets", "disabled_toolsets"])
             try:
                 result, usage = await _idem_cache.get_or_set(idempotency_key, fp, _compute_completion)
             except Exception as e:
@@ -3435,6 +3491,8 @@ class APIServerAdapter(BasePlatformAdapter):
         tool_complete_callback=None,
         agent_ref: Optional[list] = None,
         gateway_session_key: Optional[str] = None,
+        enabled_toolsets_override: Optional[List[str]] = None,
+        disabled_toolsets_override: Optional[List[str]] = None,
     ) -> tuple:
         """
         Create an agent and run a conversation in a thread executor.
@@ -3458,6 +3516,8 @@ class APIServerAdapter(BasePlatformAdapter):
                 tool_start_callback=tool_start_callback,
                 tool_complete_callback=tool_complete_callback,
                 gateway_session_key=gateway_session_key,
+                enabled_toolsets_override=enabled_toolsets_override,
+                disabled_toolsets_override=disabled_toolsets_override,
             )
             if agent_ref is not None:
                 agent_ref[0] = agent

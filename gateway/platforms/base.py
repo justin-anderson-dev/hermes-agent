@@ -1340,6 +1340,14 @@ class MessageEvent:
     # completion notifications) that must bypass user authorization checks.
     internal: bool = False
 
+    # Per-event toolset overrides. Webhook routes use this so a specific
+    # subscription (e.g. kanban-completion-handler) can request terminal/file
+    # access without expanding the platform-wide default. When None, the
+    # gateway falls back to the platform-default resolution in
+    # ``hermes_cli.tools_config._get_platform_tools``.
+    enabled_toolsets: Optional[List[str]] = None
+    disabled_toolsets: Optional[List[str]] = None
+
     # Timestamps
     timestamp: datetime = field(default_factory=datetime.now)
     
