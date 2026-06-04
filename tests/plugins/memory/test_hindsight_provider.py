@@ -5,6 +5,7 @@ prefetch (auto_recall, preamble, query truncation), sync_turn (auto_retain,
 turn counting, tags), and schema completeness.
 """
 
+import builtins
 import json
 import os
 import re
@@ -339,7 +340,16 @@ class TestConfig:
                 self.kwargs = kwargs
 
         fake_module = SimpleNamespace(Hindsight=FakeHindsight)
-        monkeypatch.setitem(sys.modules, "hindsight_client", fake_module)
+        monkeypatch.delitem(sys.modules, "hindsight_client", raising=False)
+        real_import = builtins.__import__
+
+        def _import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "hindsight_client":
+                assert ensure_calls == [("memory.hindsight", False)]
+                return fake_module
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _import)
 
         p = HindsightMemoryProvider()
         p._mode = "local_external"
@@ -349,7 +359,7 @@ class TestConfig:
 
         client = p._get_client()
 
-        assert ("memory.hindsight", False) in ensure_calls
+        assert ensure_calls == [("memory.hindsight", False)]
         assert isinstance(client, FakeHindsight)
 
 

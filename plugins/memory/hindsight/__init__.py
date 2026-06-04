@@ -883,9 +883,9 @@ class HindsightMemoryProvider(MemoryProvider):
         """Lazy-install hindsight-client before importing it.
 
         Mirrors the install-on-first-use pattern other Hermes backends use.
-        Any lazy_deps failure is re-raised as ``ImportError`` so callers'
-        ImportError handling for the subsequent ``from hindsight*`` import
-        kicks in.
+        Missing ``tools.lazy_deps`` support is ignored for compatibility, but
+        lazy-deps runtime failures are re-raised as ``ImportError`` so the
+        subsequent ``from hindsight*`` import fails clearly.
         """
         try:
             from tools.lazy_deps import ensure as _lazy_ensure
