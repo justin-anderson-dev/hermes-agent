@@ -99,6 +99,19 @@ def _is_loopback_host(host: str) -> bool:
     return host.strip().lower() in _LOOPBACK_HOSTS
 
 
+def _is_string_list(value: Any) -> bool:
+    """True when `value` is a list of non-empty strings.
+
+    Used to validate route-level toolset overrides loaded from YAML/JSON,
+    where the user could accidentally write a scalar or a list with non-string
+    entries. Rejecting at startup keeps the failure mode loud instead of
+    silently disabling the override at request time.
+    """
+    if not isinstance(value, list):
+        return False
+    return all(isinstance(item, str) and item for item in value)
+
+
 def check_webhook_requirements() -> bool:
     """Check if webhook adapter dependencies are available."""
     return AIOHTTP_AVAILABLE
@@ -188,6 +201,27 @@ class WebhookAdapter(BasePlatformAdapter):
                         f"deliver is '{deliver}'. Direct delivery requires a "
                         f"real target (telegram, discord, slack, github_comment, etc.)."
                     )
+
+            # Route-level toolset overrides (optional). When present, the
+            # gateway uses this list verbatim for that route's agent runs
+            # instead of the platform-default ``hermes-webhook`` toolset.
+            # The handler skill for kanban-completion needs ``terminal`` and
+            # ``file`` to run ``hermes kanban`` and read attached files; the
+            # platform default (web/vision/clarify) cannot satisfy that
+            # contract, so the route opts into the bigger toolset by name.
+            _route_toolsets = route.get("enabled_toolsets")
+            if _route_toolsets is not None and not _is_string_list(_route_toolsets):
+                raise ValueError(
+                    f"[webhook] Route '{name}' has invalid enabled_toolsets — "
+                    f"expected a list of toolset names (e.g. "
+                    f"['terminal', 'file', 'skills'])."
+                )
+            _route_disabled = route.get("disabled_toolsets")
+            if _route_disabled is not None and not _is_string_list(_route_disabled):
+                raise ValueError(
+                    f"[webhook] Route '{name}' has invalid disabled_toolsets — "
+                    f"expected a list of toolset names."
+                )
 
         app = web.Application()
         app.router.add_get("/health", self._handle_health)
@@ -666,6 +700,12 @@ class WebhookAdapter(BasePlatformAdapter):
             source=source,
             raw_message=payload,
             message_id=delivery_id,
+            enabled_toolsets=list(route_config["enabled_toolsets"])
+            if _is_string_list(route_config.get("enabled_toolsets"))
+            else None,
+            disabled_toolsets=list(route_config["disabled_toolsets"])
+            if _is_string_list(route_config.get("disabled_toolsets"))
+            else None,
         )
 
         logger.info(

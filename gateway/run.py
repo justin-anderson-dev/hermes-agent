@@ -9417,6 +9417,8 @@ class GatewayRunner:
                 run_generation=run_generation,
                 event_message_id=self._reply_anchor_for_event(event),
                 channel_prompt=event.channel_prompt,
+                event_enabled_toolsets=getattr(event, "enabled_toolsets", None),
+                event_disabled_toolsets=getattr(event, "disabled_toolsets", None),
             )
 
             # Stop persistent typing indicator now that the agent is done
@@ -16777,6 +16779,8 @@ class GatewayRunner:
         _interrupt_depth: int = 0,
         event_message_id: Optional[str] = None,
         channel_prompt: Optional[str] = None,
+        event_enabled_toolsets: Optional[List[str]] = None,
+        event_disabled_toolsets: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Run the agent with the given message and context.
@@ -16815,9 +16819,26 @@ class GatewayRunner:
         platform_key = _platform_config_key(source.platform)
 
         from hermes_cli.tools_config import _get_platform_tools
-        enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
+        # Per-event toolset overrides take precedence over the platform default.
+        # Webhook subscriptions populate ``event_enabled_toolsets`` so a single
+        # route (e.g. ``kanban-completion``) can request ``terminal``/``file``
+        # access without expanding the platform-wide ``hermes-webhook`` toolset
+        # for every other Linear / GitHub / monitoring webhook on the same
+        # gateway.
+        if event_enabled_toolsets:
+            enabled_toolsets = sorted(set(event_enabled_toolsets))
+            logger.info(
+                "Per-event enabled_toolsets override active for %s/%s: %s",
+                platform_key, source.chat_id, enabled_toolsets,
+            )
+        else:
+            enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
         agent_cfg_local = user_config.get("agent") or {}
-        disabled_toolsets = agent_cfg_local.get("disabled_toolsets") or None
+        disabled_toolsets = (
+            list(event_disabled_toolsets)
+            if event_disabled_toolsets
+            else (agent_cfg_local.get("disabled_toolsets") or None)
+        )
 
         display_config = user_config.get("display", {})
         if not isinstance(display_config, dict):
@@ -18884,6 +18905,8 @@ class GatewayRunner:
                 next_message = pending
                 next_message_id = None
                 next_channel_prompt = None
+                next_enabled_toolsets = event_enabled_toolsets
+                next_disabled_toolsets = event_disabled_toolsets
                 if pending_event is not None:
                     next_source = getattr(pending_event, "source", None) or source
                     if self._is_goal_continuation_event(pending_event) and not self._goal_still_active_for_session(session_id):
@@ -18901,6 +18924,8 @@ class GatewayRunner:
                         return result
                     next_message_id = self._reply_anchor_for_event(pending_event)
                     next_channel_prompt = getattr(pending_event, "channel_prompt", None)
+                    next_enabled_toolsets = getattr(pending_event, "enabled_toolsets", None)
+                    next_disabled_toolsets = getattr(pending_event, "disabled_toolsets", None)
 
                 # Restart typing indicator so the user sees activity while
                 # the follow-up turn runs.  The outer _process_message_background
@@ -18926,6 +18951,8 @@ class GatewayRunner:
                     _interrupt_depth=_interrupt_depth + 1,
                     event_message_id=next_message_id,
                     channel_prompt=next_channel_prompt,
+                    event_enabled_toolsets=next_enabled_toolsets,
+                    event_disabled_toolsets=next_disabled_toolsets,
                 )
                 return _preserve_queued_followup_history_offset(result, followup_result)
         finally:
