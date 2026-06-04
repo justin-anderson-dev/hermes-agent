@@ -878,6 +878,23 @@ class HindsightMemoryProvider(MemoryProvider):
             {"key": "idle_timeout", "description": "Embedded daemon idle timeout in seconds (0 disables auto-shutdown)", "default": _DEFAULT_IDLE_TIMEOUT, "when": {"mode": "local_embedded"}},
         ]
 
+    @staticmethod
+    def _ensure_hindsight_client_dep() -> None:
+        """Lazy-install hindsight-client before importing it.
+
+        Mirrors the install-on-first-use pattern other Hermes backends use.
+        Any lazy_deps failure is re-raised as ``ImportError`` so callers'
+        ImportError handling for the subsequent ``from hindsight*`` import
+        kicks in.
+        """
+        try:
+            from tools.lazy_deps import ensure as _lazy_ensure
+            _lazy_ensure("memory.hindsight", prompt=False)
+        except ImportError:
+            pass
+        except Exception as _e:
+            raise ImportError(str(_e))
+
     def _get_client(self):
         """Return the cached Hindsight client (created once, reused)."""
         if self._client is None:
@@ -888,13 +905,7 @@ class HindsightMemoryProvider(MemoryProvider):
                         "Hindsight local runtime is unavailable"
                         + (f": {reason}" if reason else "")
                     )
-                try:
-                    from tools.lazy_deps import ensure as _lazy_ensure
-                    _lazy_ensure("memory.hindsight", prompt=False)
-                except ImportError:
-                    pass
-                except Exception as _e:
-                    raise ImportError(str(_e))
+                self._ensure_hindsight_client_dep()
                 from hindsight import HindsightEmbedded
                 HindsightEmbedded.__del__ = lambda self: None
                 llm_provider = self._config.get("llm_provider", "")
@@ -920,6 +931,7 @@ class HindsightMemoryProvider(MemoryProvider):
                 kwargs["idle_timeout"] = idle_timeout
                 self._client = HindsightEmbedded(**kwargs)
             else:
+                self._ensure_hindsight_client_dep()
                 from hindsight_client import Hindsight
                 timeout = self._timeout or _DEFAULT_TIMEOUT
                 kwargs = {"base_url": self._api_url, "timeout": float(timeout)}
