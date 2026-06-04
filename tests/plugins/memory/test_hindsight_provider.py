@@ -5,6 +5,7 @@ prefetch (auto_recall, preamble, query truncation), sync_turn (auto_retain,
 turn counting, tags), and schema completeness.
 """
 
+import builtins
 import json
 import os
 import re
@@ -322,6 +323,44 @@ class TestConfig:
 
         assert captured["idle_timeout"] == 0
         assert captured["llm_provider"] == "openai"
+
+    def test_get_client_local_external_ensures_lazy_dep_before_import(self, monkeypatch):
+        """ALF-350: the non-embedded/local_external path must call
+        tools.lazy_deps.ensure("memory.hindsight") before importing
+        ``hindsight_client.Hindsight``, matching the embedded branch."""
+        ensure_calls = []
+
+        def _fake_ensure(feature, prompt=True):
+            ensure_calls.append((feature, prompt))
+
+        monkeypatch.setattr("tools.lazy_deps.ensure", _fake_ensure)
+
+        class FakeHindsight:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        fake_module = SimpleNamespace(Hindsight=FakeHindsight)
+        monkeypatch.delitem(sys.modules, "hindsight_client", raising=False)
+        real_import = builtins.__import__
+
+        def _import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "hindsight_client":
+                assert ensure_calls == [("memory.hindsight", False)]
+                return fake_module
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _import)
+
+        p = HindsightMemoryProvider()
+        p._mode = "local_external"
+        p._api_url = "http://localhost:8888"
+        p._api_key = ""
+        p._timeout = 60
+
+        client = p._get_client()
+
+        assert ensure_calls == [("memory.hindsight", False)]
+        assert isinstance(client, FakeHindsight)
 
 
 class TestPostSetup:
