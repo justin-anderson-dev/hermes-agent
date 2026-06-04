@@ -16491,6 +16491,8 @@ class GatewayRunner:
         session_key: str = None,
         run_generation: Optional[int] = None,
         event_message_id: Optional[str] = None,
+        event_enabled_toolsets: Optional[List[str]] = None,
+        event_disabled_toolsets: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Forward the message to a remote Hermes API server instead of
         running a local AIAgent.
@@ -16566,6 +16568,10 @@ class GatewayRunner:
             "messages": api_messages,
             "stream": True,
         }
+        if event_enabled_toolsets:
+            body["enabled_toolsets"] = sorted({str(name).strip() for name in event_enabled_toolsets if str(name).strip()})
+        if event_disabled_toolsets:
+            body["disabled_toolsets"] = sorted({str(name).strip() for name in event_disabled_toolsets if str(name).strip()})
 
         # Set up platform streaming if available -------------------------
         _stream_consumer = None
@@ -16805,6 +16811,8 @@ class GatewayRunner:
                 session_key=session_key,
                 run_generation=run_generation,
                 event_message_id=event_message_id,
+                event_enabled_toolsets=event_enabled_toolsets,
+                event_disabled_toolsets=event_disabled_toolsets,
             )
 
         from run_agent import AIAgent
@@ -16834,10 +16842,22 @@ class GatewayRunner:
         else:
             enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
         agent_cfg_local = user_config.get("agent") or {}
-        disabled_toolsets = (
-            list(event_disabled_toolsets)
-            if event_disabled_toolsets
-            else (agent_cfg_local.get("disabled_toolsets") or None)
+
+        def _normalized_toolset_names(values: Optional[List[str]]) -> List[str]:
+            if not values:
+                return []
+            return sorted({str(name).strip() for name in values if str(name).strip()})
+
+        # Route-scoped disabled toolsets must layer on top of the global
+        # agent-level denylist, never replace it.  Otherwise an explicit
+        # webhook route override could accidentally widen past
+        # ``agent.disabled_toolsets``.
+        disabled_toolsets = _normalized_toolset_names(
+            agent_cfg_local.get("disabled_toolsets") or []
+        )
+        disabled_toolsets.extend(
+            name for name in _normalized_toolset_names(event_disabled_toolsets)
+            if name not in disabled_toolsets
         )
 
         display_config = user_config.get("display", {})

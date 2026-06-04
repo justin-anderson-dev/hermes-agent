@@ -361,6 +361,96 @@ def test_run_agent_honors_event_enabled_toolsets(monkeypatch):
     assert _CapturingAgent.last_init["disabled_toolsets"] == ["web"]
 
 
+def test_run_agent_layers_event_disabled_toolsets_over_global_denylist(monkeypatch):
+    """A route-specific disabled list must not replace agent.disabled_toolsets."""
+    monkeypatch.setattr(
+        gateway_run,
+        "_load_gateway_config",
+        lambda: {"agent": {"disabled_toolsets": ["terminal", "browser"]}},
+    )
+    monkeypatch.setattr(gateway_run, "load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "hermes_cli.tools_config._get_platform_tools",
+        lambda _config, _platform: {"terminal", "file", "web", "browser"},
+    )
+
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = _CapturingAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    _CapturingAgent.last_init = None
+
+    runner = _make_runner()
+    source = SessionSource(
+        platform=Platform.WEBHOOK,
+        chat_id="webhook:noisy-source:abc",
+        chat_name="webhook/noisy-source",
+        chat_type="webhook",
+        user_id="webhook:noisy-source",
+    )
+    session_key = "agent:webhook:noisy-source:webhook"
+    runner._session_model_overrides[session_key] = _stub_runtime()
+
+    asyncio.run(
+        runner._run_agent(
+            message="Handle event",
+            context_prompt="",
+            history=[],
+            source=source,
+            session_id="sess-global-disabled",
+            session_key=session_key,
+            event_enabled_toolsets=["terminal", "file", "web"],
+            event_disabled_toolsets=["web", "terminal"],
+        )
+    )
+
+    assert _CapturingAgent.last_init is not None
+    assert _CapturingAgent.last_init["disabled_toolsets"] == [
+        "browser",
+        "terminal",
+        "web",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_agent_proxy_forwards_event_toolsets(monkeypatch):
+    """Proxy mode must forward route toolset overrides to the remote API server."""
+    captured: dict = {}
+
+    async def _proxy_handler(request):
+        captured["body"] = await request.json()
+        return web.Response(
+            text='data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+            content_type="text/event-stream",
+        )
+
+    app = web.Application()
+    app.router.add_post("/v1/chat/completions", _proxy_handler)
+    async with TestClient(TestServer(app)) as cli:
+        runner = _make_runner()
+        monkeypatch.setattr(runner, "_get_proxy_url", lambda: str(cli.make_url("")).rstrip("/"))
+        source = SessionSource(
+            platform=Platform.WEBHOOK,
+            chat_id="webhook:kanban-completion:proxy",
+            chat_name="webhook/kanban-completion",
+            chat_type="webhook",
+            user_id="webhook:kanban-completion",
+        )
+        result = await runner._run_agent(
+            message="Handle proxy event",
+            context_prompt="",
+            history=[],
+            source=source,
+            session_id="sess-proxy",
+            session_key="agent:webhook:kanban-completion:webhook",
+            event_enabled_toolsets=["terminal", "file", "terminal"],
+            event_disabled_toolsets=["web"],
+        )
+
+    assert result["final_response"] == "ok"
+    assert captured["body"]["enabled_toolsets"] == ["file", "terminal"]
+    assert captured["body"]["disabled_toolsets"] == ["web"]
+
+
 def test_run_agent_falls_back_to_platform_default_without_event_override(monkeypatch):
     """When the event carries no override, the gateway calls
     ``_get_platform_tools`` exactly once and uses its result. This guards

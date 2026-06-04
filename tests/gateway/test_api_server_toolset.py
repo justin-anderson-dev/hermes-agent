@@ -124,3 +124,36 @@ class TestApiServerAdapterToolset:
             call_kwargs = mock_agent_cls.call_args
             toolsets = call_kwargs.kwargs.get("enabled_toolsets")
             assert sorted(toolsets) == ["terminal", "web"]
+
+    @patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", True)
+    def test_create_agent_respects_request_toolset_override_and_global_disabled(self):
+        """Request-scoped overrides can narrow toolsets, but cannot bypass global disables."""
+        from gateway.platforms.api_server import APIServerAdapter
+        from gateway.config import PlatformConfig
+
+        adapter = APIServerAdapter(PlatformConfig())
+
+        with patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
+             patch("gateway.run._resolve_gateway_model") as mock_model, \
+             patch("gateway.run._load_gateway_config") as mock_config, \
+             patch("run_agent.AIAgent") as mock_agent_cls:
+
+            mock_kwargs.return_value = {"api_key": "test-key", "base_url": None,
+                                        "provider": None, "api_mode": None,
+                                        "command": None, "args": []}
+            mock_model.return_value = "test/model"
+            mock_config.return_value = {
+                "platform_toolsets": {"api_server": ["web", "terminal", "file"]},
+                "agent": {"disabled_toolsets": ["terminal"]},
+            }
+            mock_agent_cls.return_value = MagicMock()
+
+            adapter._create_agent(
+                enabled_toolsets_override=["file", "skills", "file"],
+                disabled_toolsets_override=["web"],
+            )
+
+            mock_agent_cls.assert_called_once()
+            call_kwargs = mock_agent_cls.call_args
+            assert call_kwargs.kwargs.get("enabled_toolsets") == ["file", "skills"]
+            assert call_kwargs.kwargs.get("disabled_toolsets") == ["terminal", "web"]
